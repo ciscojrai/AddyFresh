@@ -1,0 +1,6 @@
+{
+  "name": "FreshAddy",
+  "description": "Interactive 3D glass terrarium with procedural flora, day/night lighting, weather controls, and vector particle globe.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
