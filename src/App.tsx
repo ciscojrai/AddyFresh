@@ -18,6 +18,29 @@ export default function App() {
   const [isAutoRotating, setIsAutoRotating] = useState(true);
   const [isBezelMode, setIsBezelMode] = useState(false);
   const [globePosition, setGlobePosition] = useState<GlobeLayoutPosition>('Top');
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(orientation: portrait)');
+    const handleOrientationChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      const newOrientation = e.matches ? 'portrait' : 'landscape';
+      setOrientation(newOrientation);
+
+      setGlobePosition((prev) => {
+        if (newOrientation === 'portrait' && (prev === 'Left' || prev === 'Right')) {
+          return 'Top';
+        }
+        if (newOrientation === 'landscape' && (prev === 'Top' || prev === 'Low')) {
+          return 'Left';
+        }
+        return prev;
+      });
+    };
+
+    handleOrientationChange(mediaQuery);
+    mediaQuery.addEventListener('change', handleOrientationChange);
+    return () => mediaQuery.removeEventListener('change', handleOrientationChange);
+  }, []);
 
   // Global Lighting State Controller
   const [lightingState, setLightingState] = useState<GlobalLightingState>({
@@ -239,6 +262,7 @@ export default function App() {
                   lightingProgress={lightingState.progress}
                   globePosition={globePosition}
                   onSetGlobePosition={setGlobePosition}
+                  orientation={orientation}
                 />
               </div>
 
@@ -298,6 +322,7 @@ export default function App() {
                 lightingProgress={lightingState.progress}
                 globePosition={globePosition}
                 onSetGlobePosition={setGlobePosition}
+                orientation={orientation}
               />
             </div>
 

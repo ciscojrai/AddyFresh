@@ -13,6 +13,7 @@ interface ParticleGlobeProps {
   lightingProgress?: number;
   globePosition: GlobeLayoutPosition;
   onSetGlobePosition: (pos: GlobeLayoutPosition) => void;
+  orientation: 'portrait' | 'landscape';
 }
 
 // Scratch reusable variables to satisfy zero-GC discipline in render loop
@@ -39,6 +40,7 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
   lightingProgress,
   globePosition,
   onSetGlobePosition,
+  orientation,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [projectedNodes, setProjectedNodes] = useState<
@@ -601,23 +603,27 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
         className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-950/85 border border-cyan-500/35 shadow-[0_0_15px_rgba(0,243,255,0.2)] backdrop-blur-md select-none pointer-events-auto"
       >
         <span className="text-[11px] font-mono text-cyan-400 font-semibold pr-1">Globe:</span>
-        {(['Top', 'Low', 'Left', 'Right'] as const).map((pos) => {
-          const isActive = globePosition === pos;
-          return (
-            <button
-              key={pos}
-              type="button"
-              onClick={() => onSetGlobePosition(pos)}
-              className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-medium transition-all duration-200 cursor-pointer ${
-                isActive
-                  ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400 shadow-[0_0_10px_rgba(0,243,255,0.45)]'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-900/60 border border-transparent'
-              }`}
-            >
-              {pos}
-            </button>
-          );
-        })}
+        {(['Top', 'Low', 'Left', 'Right'] as const)
+          .filter((pos) =>
+            orientation === 'portrait' ? ['Top', 'Low'].includes(pos) : ['Left', 'Right'].includes(pos)
+          )
+          .map((pos) => {
+            const isActive = globePosition === pos;
+            return (
+              <button
+                key={pos}
+                type="button"
+                onClick={() => onSetGlobePosition(pos)}
+                className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-medium transition-all duration-200 cursor-pointer ${
+                  isActive
+                    ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400 shadow-[0_0_10px_rgba(0,243,255,0.45)]'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900/60 border border-transparent'
+                }`}
+              >
+                {pos}
+              </button>
+            );
+          })}
       </div>
     </div>
   );
