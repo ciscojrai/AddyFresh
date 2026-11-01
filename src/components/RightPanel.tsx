@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   ChevronRight,
 } from 'lucide-react';
-import { GlobeNode, TerrariumEvent, EcosystemTelemetry } from '../types/terrarium';
+import { GlobeNode, TerrariumEvent, EcosystemTelemetry, GlobalLightingState } from '../types/terrarium';
+import { LightingController } from './LightingController';
 
 interface RightPanelProps {
   telemetry: EcosystemTelemetry;
@@ -24,6 +25,10 @@ interface RightPanelProps {
   onClearSelectedNode: () => void;
   onSelectNode: (node: GlobeNode) => void;
   allNodes: GlobeNode[];
+  lightingState: GlobalLightingState;
+  onToggleLightingMode: () => void;
+  onSetLightingProgress: (prog: number) => void;
+  onToggleAutoCycle: () => void;
 }
 
 export const RightPanel: React.FC<RightPanelProps> = ({
@@ -33,6 +38,10 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   onClearSelectedNode,
   onSelectNode,
   allNodes,
+  lightingState,
+  onToggleLightingMode,
+  onSetLightingProgress,
+  onToggleAutoCycle,
 }) => {
   const [activeTab, setActiveTab] = useState<'stream' | 'telemetry' | 'scaffold'>('stream');
   const [isPlaying, setIsPlaying] = useState(true);
@@ -249,16 +258,49 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 <div className="text-[10px] text-slate-500 font-mono mt-1">Thermal stability OK</div>
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-950/50 border border-slate-800/80">
-                <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 mb-1">
-                  <Moon className="w-3.5 h-3.5 text-fuchsia-400" />
-                  Photoperiod
+              <button
+                onClick={onToggleLightingMode}
+                className={`p-3 rounded-lg border text-left transition-all duration-300 group ${
+                  lightingState.mode === 'day'
+                    ? 'bg-cyan-950/40 border-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.25)] hover:border-cyan-300'
+                    : 'bg-fuchsia-950/30 border-fuchsia-500/70 shadow-[0_0_15px_rgba(217,70,239,0.2)] hover:border-fuchsia-400'
+                }`}
+                title="Click to toggle Day / Night photoperiod"
+              >
+                <div className="flex items-center justify-between text-[11px] font-mono mb-1">
+                  <span className={`flex items-center gap-1.5 ${
+                    lightingState.mode === 'day' ? 'text-cyan-300' : 'text-fuchsia-400'
+                  }`}>
+                    {lightingState.mode === 'day' ? (
+                      <Sun className="w-3.5 h-3.5 text-white" />
+                    ) : (
+                      <Moon className="w-3.5 h-3.5 text-fuchsia-400" />
+                    )}
+                    Photoperiod
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono group-hover:text-white transition-colors">
+                    Toggle ↺
+                  </span>
                 </div>
-                <div className="text-base font-mono font-semibold text-fuchsia-300 capitalize">
-                  {telemetry.photoperiod}
+                <div className={`text-base font-mono font-semibold capitalize ${
+                  lightingState.mode === 'day' ? 'text-cyan-200' : 'text-fuchsia-300'
+                }`}>
+                  {lightingState.mode === 'day' ? 'Solar Day' : 'Cosmic Night'}
                 </div>
-                <div className="text-[10px] text-slate-500 font-mono mt-1">Cosmic Dark Cycle</div>
-              </div>
+                <div className="text-[10px] text-slate-400 font-mono mt-1">
+                  {lightingState.mode === 'day' ? 'Bright Cyan / White' : 'Deep Indigo / Magenta'}
+                </div>
+              </button>
+            </div>
+
+            {/* Granular Global Lighting State Controller */}
+            <div className="pt-1">
+              <LightingController
+                lightingState={lightingState}
+                onToggleMode={onToggleLightingMode}
+                onSetProgress={onSetLightingProgress}
+                onToggleAutoCycle={onToggleAutoCycle}
+              />
             </div>
 
             {/* Registered Pins list */}

@@ -3,11 +3,32 @@
 @layer base {
   :root {
     --bg-cosmic: #050714;
+    --bg-viewport: #050716;
     --bg-cosmic-card: rgba(8, 12, 28, 0.75);
     --border-cyan-glow: rgba(0, 243, 255, 0.4);
     --border-magenta-glow: rgba(217, 70, 239, 0.6);
     --neon-cyan: #00f3ff;
     --neon-magenta: #d946ef;
+    --divider-grad: linear-gradient(180deg, rgba(217, 70, 239, 0.2) 0%, rgba(217, 70, 239, 0.95) 30%, rgba(217, 70, 239, 0.95) 70%, rgba(217, 70, 239, 0.2) 100%);
+    --divider-shadow: 0 0 12px rgba(217, 70, 239, 0.7), 0 0 24px rgba(217, 70, 239, 0.35);
+    --divider-horiz: linear-gradient(90deg, rgba(217, 70, 239, 0.2) 0%, rgba(217, 70, 239, 0.95) 30%, rgba(217, 70, 239, 0.95) 70%, rgba(217, 70, 239, 0.2) 100%);
+    --shell-border-color: rgba(217, 70, 239, 0.4);
+    --shell-shadow: 0 0 25px rgba(217, 70, 239, 0.25), inset 0 0 20px rgba(0, 243, 255, 0.08);
+  }
+
+  :root[data-theme="day"] {
+    --bg-cosmic: #07192f;
+    --bg-viewport: #0a223f;
+    --bg-cosmic-card: rgba(10, 32, 60, 0.8);
+    --border-cyan-glow: rgba(0, 243, 255, 0.65);
+    --border-magenta-glow: rgba(255, 255, 255, 0.6);
+    --neon-cyan: #22d3ee;
+    --neon-magenta: #ffffff;
+    --divider-grad: linear-gradient(180deg, rgba(0, 243, 255, 0.2) 0%, rgba(255, 255, 255, 0.95) 35%, rgba(0, 243, 255, 0.95) 65%, rgba(0, 243, 255, 0.2) 100%);
+    --divider-shadow: 0 0 15px rgba(0, 243, 255, 0.85), 0 0 30px rgba(255, 255, 255, 0.6);
+    --divider-horiz: linear-gradient(90deg, rgba(0, 243, 255, 0.2) 0%, rgba(255, 255, 255, 0.95) 35%, rgba(0, 243, 255, 0.95) 65%, rgba(0, 243, 255, 0.2) 100%);
+    --shell-border-color: rgba(0, 243, 255, 0.6);
+    --shell-shadow: 0 0 30px rgba(0, 243, 255, 0.35), inset 0 0 25px rgba(255, 255, 255, 0.15);
   }
 
   body {
@@ -18,6 +39,7 @@
     margin: 0;
     padding: 0;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), color 0.5s ease;
   }
 
   code, pre, .font-mono {
@@ -25,37 +47,54 @@
   }
 }
 
+/* Smooth Theme Transition Class */
+.theme-transition {
+  transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.5s ease;
+}
+
 /* Custom Neon & Glass Styling */
 .glass-panel {
-  background: rgba(7, 11, 26, 0.65);
+  background: var(--bg-cosmic-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 243, 255, 0.15);
+  border: 1px solid rgba(0, 243, 255, 0.18);
+  transition: background 0.8s ease, border-color 0.8s ease;
 }
 
 .glass-pill {
   background: rgba(10, 16, 37, 0.7);
   border: 1px solid rgba(0, 243, 255, 0.35);
   box-shadow: 0 0 12px rgba(0, 243, 255, 0.15);
+  transition: all 0.5s ease;
 }
 
 .glow-cyan-border {
-  border-color: rgba(0, 243, 255, 0.6);
+  border-color: var(--border-cyan-glow);
   box-shadow: 0 0 15px rgba(0, 243, 255, 0.25), inset 0 0 15px rgba(0, 243, 255, 0.1);
+  transition: all 0.8s ease;
 }
 
-.glow-magenta-divider {
-  background: linear-gradient(180deg, rgba(217, 70, 239, 0.2) 0%, rgba(217, 70, 239, 0.95) 30%, rgba(217, 70, 239, 0.95) 70%, rgba(217, 70, 239, 0.2) 100%);
-  box-shadow: 0 0 12px rgba(217, 70, 239, 0.7), 0 0 24px rgba(217, 70, 239, 0.35);
+.glow-theme-divider {
+  background: var(--divider-grad);
+  box-shadow: var(--divider-shadow);
+  transition: background 0.8s ease, box-shadow 0.8s ease;
 }
 
-.glow-magenta-horizontal {
-  background: linear-gradient(90deg, rgba(217, 70, 239, 0.2) 0%, rgba(217, 70, 239, 0.95) 30%, rgba(217, 70, 239, 0.95) 70%, rgba(217, 70, 239, 0.2) 100%);
-  box-shadow: 0 0 12px rgba(217, 70, 239, 0.7), 0 0 24px rgba(217, 70, 239, 0.35);
+.glow-theme-horizontal {
+  background: var(--divider-horiz);
+  box-shadow: var(--divider-shadow);
+  transition: background 0.8s ease, box-shadow 0.8s ease;
 }
 
 .glow-magenta-circle {
   box-shadow: 0 0 10px rgba(217, 70, 239, 0.6);
+}
+
+.glow-day-circle {
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.5);
 }
 
 /* Custom scrollbars */

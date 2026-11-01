@@ -4,6 +4,15 @@
 
 export type WeatherType = 'sunny' | 'aurora' | 'mist' | 'rain' | 'starlight';
 
+export type LightingMode = 'day' | 'night';
+
+export interface GlobalLightingState {
+  mode: LightingMode;
+  progress: number; // 0 (Night: deep indigo/magenta) to 1 (Day: bright cyan/white)
+  autoCycle: boolean;
+  cycleDurationSec: number;
+}
+
 export interface GlobeNode {
   id: string;
   name: string;

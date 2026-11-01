@@ -9,11 +9,23 @@ interface ParticleGlobeProps {
   onSelectNode: (node: GlobeNode) => void;
   isAutoRotating?: boolean;
   onToggleAutoRotate?: () => void;
+  lightingMode?: 'day' | 'night';
+  lightingProgress?: number;
 }
 
 // Scratch reusable variables to satisfy zero-GC discipline in render loop
 const _vec3 = new THREE.Vector3();
 const _screenCoord = new THREE.Vector3();
+const _nightFogColor = new THREE.Color(0x050714);
+const _dayFogColor = new THREE.Color(0x0a223f);
+const _nightPointsColor = new THREE.Color(0x00f3ff);
+const _dayPointsColor = new THREE.Color(0xffffff);
+const _nightAmbientColor = new THREE.Color(0x0a1026);
+const _dayAmbientColor = new THREE.Color(0x133863);
+const _nightRimColor = new THREE.Color(0x00f3ff);
+const _dayRimColor = new THREE.Color(0xffffff);
+const _nightAuraColor = new THREE.Color(0x00f3ff);
+const _dayAuraColor = new THREE.Color(0x22d3ee);
 
 export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
   nodes,
@@ -21,6 +33,8 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
   onSelectNode,
   isAutoRotating = true,
   onToggleAutoRotate,
+  lightingMode = 'night',
+  lightingProgress,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [projectedNodes, setProjectedNodes] = useState<
@@ -29,6 +43,8 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  const initialProg = lightingProgress !== undefined ? lightingProgress : (lightingMode === 'day' ? 1 : 0);
 
   // References for animation & interaction loop
   const stateRef = useRef({
@@ -46,7 +62,15 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
     autoRotate: isAutoRotating,
     velocityRotY: 0.002,
     lastFrameTime: performance.now(),
+    targetLightingProgress: initialProg,
+    currentLightingProgress: initialProg,
   });
+
+  // Sync lighting progress targets
+  useEffect(() => {
+    stateRef.current.targetLightingProgress =
+      lightingProgress !== undefined ? lightingProgress : (lightingMode === 'day' ? 1 : 0);
+  }, [lightingMode, lightingProgress]);
 
   // Sync autoRotate prop
   useEffect(() => {
@@ -308,6 +332,31 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
       // Apply rotations to globe
       globeGroup.rotation.y = s.rotY;
       globeGroup.rotation.x = s.rotX;
+
+      // Smoothly interpolate lighting progress (0 = Night, 1 = Day)
+      const targetProg = s.targetLightingProgress;
+      const lightDamp = Math.min(1, 1 - Math.exp(-6 * dt));
+      s.currentLightingProgress += (targetProg - s.currentLightingProgress) * lightDamp;
+      const t = s.currentLightingProgress;
+
+      // Lerp fog color
+      if (scene.fog && scene.fog instanceof THREE.FogExp2) {
+        scene.fog.color.lerpColors(_nightFogColor, _dayFogColor, t);
+      }
+
+      // Lerp particles color & brightness
+      pointsMaterial.color.lerpColors(_nightPointsColor, _dayPointsColor, t);
+
+      // Lerp ambient and directional studio light
+      ambientLight.color.lerpColors(_nightAmbientColor, _dayAmbientColor, t);
+      ambientLight.intensity = THREE.MathUtils.lerp(1.2, 2.4, t);
+
+      rimLight.color.lerpColors(_nightRimColor, _dayRimColor, t);
+      rimLight.intensity = THREE.MathUtils.lerp(1.5, 3.0, t);
+
+      // Lerp aura mesh
+      auraMat.opacity = THREE.MathUtils.lerp(0.04, 0.09, t);
+      auraMat.color.lerpColors(_nightAuraColor, _dayAuraColor, t);
 
       // Render Three.js scene
       renderer.render(scene, camera);
