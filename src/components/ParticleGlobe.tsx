@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { GlobeNode } from '../types/terrarium';
-import { Cloud, Sparkles, Sprout, Radio, Plus, Minus, RotateCw, Pause, Play } from 'lucide-react';
+import { GlobeNode, GlobeLayoutPosition } from '../types/terrarium';
+import { Cloud, Sparkles, Sprout, Radio, Plus, Minus } from 'lucide-react';
 
 interface ParticleGlobeProps {
   nodes: GlobeNode[];
@@ -11,6 +11,8 @@ interface ParticleGlobeProps {
   onToggleAutoRotate?: () => void;
   lightingMode?: 'day' | 'night';
   lightingProgress?: number;
+  globePosition: GlobeLayoutPosition;
+  onSetGlobePosition: (pos: GlobeLayoutPosition) => void;
 }
 
 // Scratch reusable variables to satisfy zero-GC discipline in render loop
@@ -35,6 +37,8 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
   onToggleAutoRotate,
   lightingMode = 'night',
   lightingProgress,
+  globePosition,
+  onSetGlobePosition,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [projectedNodes, setProjectedNodes] = useState<
@@ -503,7 +507,7 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full min-h-[380px] flex items-center justify-center overflow-hidden select-none">
+    <div className="relative w-full h-full min-h-0 flex items-center justify-center overflow-hidden select-none">
       {/* Three.js Canvas Container */}
       <div
         ref={mountRef}
@@ -585,26 +589,35 @@ export const ParticleGlobe: React.FC<ParticleGlobeProps> = ({
         </button>
       </div>
 
-      {/* Mini bottom status & rotation toggle bar */}
-      <div className="absolute bottom-2 left-3 flex items-center gap-1.5 text-[10px] font-mono text-cyan-400/70 z-10 pointer-events-auto">
-        <button
-          onClick={onToggleAutoRotate}
-          className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950/80 border border-cyan-500/30 hover:border-cyan-400 hover:text-cyan-200 transition-colors"
-          title={isAutoRotating ? 'Pause auto-rotation' : 'Resume auto-rotation'}
-        >
-          {isAutoRotating ? <Pause className="w-2.5 h-2.5 text-cyan-400" /> : <Play className="w-2.5 h-2.5 text-cyan-400" />}
-          <span>{isAutoRotating ? 'ORBIT' : 'HALT'}</span>
-        </button>
-        <button
-          onClick={handleResetOrientation}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-950/80 border border-cyan-500/30 hover:border-cyan-400 hover:text-cyan-200 transition-colors"
-          title="Reset View"
-        >
-          <RotateCw className="w-2.5 h-2.5" />
-        </button>
-        <span className="hidden lg:inline-block text-[10px] text-slate-500">
-          {(zoomLevel * 100).toFixed(0)}% • Drag to rotate
-        </span>
+      {/* Segmented Radio Toggle: Globe: [Top] [Low] [Left] [Right] */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '16px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 30,
+        }}
+        className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-950/85 border border-cyan-500/35 shadow-[0_0_15px_rgba(0,243,255,0.2)] backdrop-blur-md select-none pointer-events-auto"
+      >
+        <span className="text-[11px] font-mono text-cyan-400 font-semibold pr-1">Globe:</span>
+        {(['Top', 'Low', 'Left', 'Right'] as const).map((pos) => {
+          const isActive = globePosition === pos;
+          return (
+            <button
+              key={pos}
+              type="button"
+              onClick={() => onSetGlobePosition(pos)}
+              className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-medium transition-all duration-200 cursor-pointer ${
+                isActive
+                  ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400 shadow-[0_0_10px_rgba(0,243,255,0.45)]'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-900/60 border border-transparent'
+              }`}
+            >
+              {pos}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

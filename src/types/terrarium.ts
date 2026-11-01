@@ -6,6 +6,8 @@ export type WeatherType = 'sunny' | 'aurora' | 'mist' | 'rain' | 'starlight';
 
 export type LightingMode = 'day' | 'night';
 
+export type GlobeLayoutPosition = 'Top' | 'Low' | 'Left' | 'Right';
+
 export interface GlobalLightingState {
   mode: LightingMode;
   progress: number; // 0 (Night: deep indigo/magenta) to 1 (Day: bright cyan/white)

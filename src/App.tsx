@@ -8,7 +8,7 @@ import { Header } from './components/Header';
 import { ParticleGlobe } from './components/ParticleGlobe';
 import { RightPanel } from './components/RightPanel';
 import { INITIAL_GLOBE_NODES, INITIAL_MOCK_EVENTS, INITIAL_TELEMETRY } from './data/mockEvents';
-import { GlobeNode, TerrariumEvent, EcosystemTelemetry, GlobalLightingState, LightingMode } from './types/terrarium';
+import { GlobeNode, TerrariumEvent, EcosystemTelemetry, GlobalLightingState, LightingMode, GlobeLayoutPosition } from './types/terrarium';
 
 export default function App() {
   const [telemetry, setTelemetry] = useState<EcosystemTelemetry>(INITIAL_TELEMETRY);
@@ -17,6 +17,7 @@ export default function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isAutoRotating, setIsAutoRotating] = useState(true);
   const [isBezelMode, setIsBezelMode] = useState(false);
+  const [globePosition, setGlobePosition] = useState<GlobeLayoutPosition>('Top');
 
   // Global Lighting State Controller
   const [lightingState, setLightingState] = useState<GlobalLightingState>({
@@ -149,6 +150,22 @@ export default function App() {
     }));
   };
 
+  // Determine layout class for main wrapper based on globePosition
+  const getLayoutClasses = (pos: GlobeLayoutPosition) => {
+    switch (pos) {
+      case 'Top':
+        return 'flex-col';
+      case 'Low':
+        return 'flex-col-reverse';
+      case 'Left':
+        return 'flex-row';
+      case 'Right':
+        return 'flex-row-reverse';
+    }
+  };
+
+  const isVerticalLayout = globePosition === 'Top' || globePosition === 'Low';
+
   return (
     <div
       className={`min-h-screen w-full text-slate-100 flex flex-col items-center justify-between overflow-x-hidden relative theme-transition ${
@@ -204,12 +221,14 @@ export default function App() {
 
             {/* Inner display screen */}
             <div
-              className={`flex-1 w-full rounded-[36px] overflow-hidden flex flex-col theme-transition ${
+              className={`flex-1 w-full rounded-[36px] overflow-hidden flex ${getLayoutClasses(
+                globePosition
+              )} theme-transition ${
                 isDay ? 'bg-[#0a223f] border border-cyan-400/50' : 'bg-[#050714] border border-cyan-500/30'
               }`}
             >
-              {/* Globe taking top viewport on mobile phone */}
-              <div className="h-[46%] w-full relative">
+              {/* Globe Container */}
+              <div className={`${isVerticalLayout ? 'h-[46%] w-full' : 'w-1/2 h-full'} relative`}>
                 <ParticleGlobe
                   nodes={nodes}
                   selectedNodeId={selectedNodeId}
@@ -218,14 +237,20 @@ export default function App() {
                   onToggleAutoRotate={handleToggleAutoRotate}
                   lightingMode={lightingState.mode}
                   lightingProgress={lightingState.progress}
+                  globePosition={globePosition}
+                  onSetGlobePosition={setGlobePosition}
                 />
               </div>
 
               {/* Glowing Dynamic Divider on Mobile */}
-              <div className="w-full h-[2px] glow-theme-horizontal relative z-20" />
+              {isVerticalLayout ? (
+                <div className="w-full h-[2px] glow-theme-horizontal relative z-10 pointer-events-none flex-shrink-0" />
+              ) : (
+                <div className="w-[2px] h-full glow-theme-divider relative z-10 pointer-events-none flex-shrink-0" />
+              )}
 
-              {/* Bottom half: RightPanel */}
-              <div className="flex-1 w-full overflow-hidden">
+              {/* Panel Container */}
+              <div className="flex-1 overflow-hidden">
                 <RightPanel
                   telemetry={telemetry}
                   events={events}
@@ -247,15 +272,19 @@ export default function App() {
         ) : (
           /* 16:9 Centered Widescreen Shell matching user mockup */
           <div
-            className={`w-full max-w-6xl aspect-[16/10] sm:aspect-[16/9] min-h-[520px] max-h-[86vh] rounded-2xl sm:rounded-3xl theme-transition flex flex-col md:flex-row overflow-hidden relative backdrop-blur-xl ${
+            className={`w-full max-w-6xl aspect-[16/10] sm:aspect-[16/9] min-h-[520px] max-h-[86vh] rounded-2xl sm:rounded-3xl theme-transition flex ${getLayoutClasses(
+              globePosition
+            )} overflow-hidden relative backdrop-blur-xl ${
               isDay
                 ? 'bg-[#0a223f]/90 border border-cyan-400/60 shadow-[0_0_35px_rgba(0,243,255,0.35),inset_0_0_25px_rgba(255,255,255,0.12)]'
                 : 'bg-[#050714]/90 border border-fuchsia-500/40 shadow-[0_0_30px_rgba(217,70,239,0.25),inset_0_0_20px_rgba(0,243,255,0.06)]'
             }`}
           >
-            {/* Left Pane: 3D Particle Vector Sphere (top on mobile, left on desktop) */}
+            {/* Globe Container */}
             <div
-              className={`w-full md:w-1/2 h-[45%] md:h-full relative flex items-center justify-center theme-transition ${
+              className={`${
+                isVerticalLayout ? 'w-full h-1/2 min-h-0' : 'w-1/2 h-full'
+              } relative flex items-center justify-center theme-transition ${
                 isDay ? 'bg-[#0a223f]' : 'bg-[#050714]'
               }`}
             >
@@ -267,16 +296,23 @@ export default function App() {
                 onToggleAutoRotate={handleToggleAutoRotate}
                 lightingMode={lightingState.mode}
                 lightingProgress={lightingState.progress}
+                globePosition={globePosition}
+                onSetGlobePosition={setGlobePosition}
               />
             </div>
 
-            {/* Glowing Neon Divider with smooth Day / Night theme transition */}
-            <div className="hidden md:block w-[2px] h-full glow-theme-divider relative z-20 flex-shrink-0" />
-            <div className="block md:hidden w-full h-[2px] glow-theme-horizontal relative z-20 flex-shrink-0" />
+            {/* Glowing Neon Divider with dynamic orientation */}
+            {isVerticalLayout ? (
+              <div className="w-full h-[2px] glow-theme-horizontal relative z-10 pointer-events-none flex-shrink-0" />
+            ) : (
+              <div className="w-[2px] h-full glow-theme-divider relative z-10 pointer-events-none flex-shrink-0" />
+            )}
 
-            {/* Right Pane: Panel with checkmark, D'verse, radar, events stream, telemetry, and lighting */}
+            {/* Panel Container */}
             <div
-              className={`w-full md:w-1/2 h-[55%] md:h-full relative overflow-hidden theme-transition ${
+              className={`${
+                isVerticalLayout ? 'w-full h-1/2' : 'w-1/2 h-full'
+              } relative overflow-hidden flex-1 theme-transition ${
                 isDay ? 'bg-[#081b33]' : 'bg-[#050714]'
               }`}
             >
