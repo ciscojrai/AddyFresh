@@ -1,258 +1,918 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { GlobeView } from './components/GlobeView';
+import { MoodMover } from './components/MoodMover';
+import { HomeFeed } from './components/HomeFeed';
+import { SearchView } from './components/SearchView';
+import { ChatView, ChatConversation } from './components/ChatView';
+import { SavedView } from './components/SavedView';
+import { FestivalFeed } from './components/FestivalFeed';
+import { BottomControls } from './components/BottomControls';
+import { EventModal } from './components/EventModal';
+import { StreetViewPanel } from './components/StreetViewPanel';
+import { PhoneStatusBar } from './components/PhoneStatusBar';
+import { McpInfoModal } from './components/McpInfoModal';
+import { EVENTS_DATA, MOODS } from './data/events';
+import { FESTIVAL_VIDEOS } from './data/festivalVideos';
+import {
+  EventItem,
+  Mood,
+  ActiveNav,
+  CameraPerspective,
+  ThemeMode,
+  StreetViewTarget,
+} from './types';
+import { getMcpServerStatus, McpServerInfo, searchMcpEventsDetailed } from './services/mcpClient';
+import * as maplibregl from 'maplibre-gl';
+import { addEventPinsToMap } from './mapPins.js';
+import { flyCameraToCoordinate } from './cameraFlyer.js';
+import { initMapLibreWorker } from './maplibreWorker.ts';
+import { GoogleMap3DView } from './components/GoogleMap3DView';
+import { Smartphone, Maximize2, Radio, ChevronUp } from 'lucide-react';
+import { useHaptic } from './hooks/useHaptic';
 
-import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { ParticleGlobe } from './components/ParticleGlobe';
-import { RightPanel } from './components/RightPanel';
-import { ResponsiveShell } from './layouts/ResponsiveShell';
-import { INITIAL_GLOBE_NODES, INITIAL_MOCK_EVENTS, INITIAL_TELEMETRY } from './data/mockEvents';
-import { GlobeNode, TerrariumEvent, EcosystemTelemetry, GlobalLightingState, LightingMode, GlobeLayoutPosition } from './types/terrarium';
+const INITIAL_CONVERSATIONS: ChatConversation[] = [
+  {
+    id: 'conv-1',
+    title: 'Tokyo Underground & Synthwave',
+    pinned: true,
+    updatedAt: '2h ago',
+    messages: [
+      {
+        id: 'm1-1',
+        sender: 'user',
+        text: 'What are the top cyberpunk and synthwave venues in Tokyo right now?',
+        timestamp: '10:14 PM',
+      },
+      {
+        id: 'm1-2',
+        sender: 'assistant',
+        text: 'Top recommendations in Tokyo:\n\n1. Cyberpunk Rooftop Rave at Roppongi Hills Mori Tower\n2. Contact Tokyo in Shibuya B2 for raw modular synthwave\n3. Womb Tokyo for multi-floor visual mapping\n\nClear night weather (18°C) currently reported on rain radar.',
+        timestamp: '10:15 PM',
+      },
+    ],
+  },
+  {
+    id: 'conv-2',
+    title: 'Comic-Con 2027 Schedule',
+    pinned: true,
+    updatedAt: '5h ago',
+    messages: [
+      {
+        id: 'm2-1',
+        sender: 'user',
+        text: 'Do we have events logged into next year like Comic Con late 2027?',
+        timestamp: '8:30 PM',
+      },
+      {
+        id: 'm2-2',
+        sender: 'assistant',
+        text: 'Yes! Tokyo Comic-Con is scheduled for late November 2027 at Makuhari Messe, alongside San Diego Comic-Con 2027 badge registration lotteries. BigQuery graph indexing has all team aliases and guest panels mapped.',
+        timestamp: '8:31 PM',
+      },
+    ],
+  },
+  {
+    id: 'conv-3',
+    title: 'Global Music Festivals Calendar',
+    pinned: true,
+    updatedAt: '1d ago',
+    messages: [
+      {
+        id: 'm3-1',
+        sender: 'user',
+        text: 'Summarize the top European music festivals on the globe.',
+        timestamp: 'Yesterday',
+      },
+      {
+        id: 'm3-2',
+        sender: 'assistant',
+        text: '• London Printworks Drum & Bass Open Air\n• Berlin Kraftwerk Techno Marathon\n• Paris Nuit Blanche Sound Installations in Le Marais\n\nAll 3 have glowing pins on your 3D globe.',
+        timestamp: 'Yesterday',
+      },
+    ],
+  },
+  {
+    id: 'conv-4',
+    title: 'Berlin Secret Boiler Rooms',
+    pinned: false,
+    updatedAt: '2d ago',
+    messages: [
+      {
+        id: 'm4-1',
+        sender: 'user',
+        text: 'Any unlisted industrial techno sessions in Berlin?',
+        timestamp: 'Oct 7',
+      },
+      {
+        id: 'm4-2',
+        sender: 'assistant',
+        text: 'Tresor Berlin and Kraftwerk industrial boiler rooms are tracking 3,400+ attendees going this weekend. Sub-bass rave mood is active on the globe.',
+        timestamp: 'Oct 7',
+      },
+    ],
+  },
+  {
+    id: 'conv-5',
+    title: 'Rio Sunset Beach Grooves',
+    pinned: false,
+    updatedAt: '3d ago',
+    messages: [
+      {
+        id: 'm5-1',
+        sender: 'user',
+        text: 'Best sunset acoustic vibes in Rio de Janeiro?',
+        timestamp: 'Oct 6',
+      },
+      {
+        id: 'm5-2',
+        sender: 'assistant',
+        text: 'Ipanema Posto 9 sunset jam starts at 17:30 with live bossa fusions and seaside acoustic chill.',
+        timestamp: 'Oct 6',
+      },
+    ],
+  },
+  {
+    id: 'conv-6',
+    title: 'Rain Radar Event Advisories',
+    pinned: false,
+    updatedAt: '4d ago',
+    messages: [
+      {
+        id: 'm6-1',
+        sender: 'user',
+        text: 'How does rain radar affect outdoor festival alerts?',
+        timestamp: 'Oct 5',
+      },
+      {
+        id: 'm6-2',
+        sender: 'assistant',
+        text: 'When rain radar is toggled on, open-air stadiums in precipitation zones trigger weather advisories in your alerts drawer.',
+        timestamp: 'Oct 5',
+      },
+    ],
+  },
+];
+
+function generateAiResponse(query: string, events: EventItem[]): string {
+  const q = query.toLowerCase();
+
+  if (q.includes('comic') || q.includes('con') || q.includes('2027')) {
+    return `Here are the latest updates for Comic-Con & Sci-Fi Expos through 2027:\n\n• San Diego Comic-Con: Summer dates confirmed at the Convention Center.\n• Tokyo Comic-Con (Late 2027): Confirmed for November 2027 at Makuhari Messe with special guest spotlights & international artist alley.\n• Badges & Passes: Pre-registration opens Q1 2027 with multi-day pass lotteries.\n\nAll venues are mapped on your 3D globe with live coordinates.`;
+  }
+
+  if (q.includes('tokyo') || q.includes('japan')) {
+    return `Tokyo currently has several premier experiences tracked on the globe:\n\n• Cyberpunk Rooftop Rave (Roppongi Hills Mori Tower)\n• Neon Shibuya Underground Beats (Contact Tokyo / Shibuya B2)\n• Akihabara VR Retro Arcade & Tech Summit\n\nRain Radar status: Clear skies, 18°C. Camera perspective is calibrated for 3D orbital view.`;
+  }
+
+  if (q.includes('music') || q.includes('techno') || q.includes('rave') || q.includes('berlin')) {
+    return `Berlin & European Underground Highlights:\n\n• Kraftwerk Industrial Techno Marathon (Tresor / Mitte)\n• Friedrichshain Sound Lab & Boiler Room session\n• London Drums & Bass Warehouse Rave (Printworks London)\n\nAll venues are glowing on the 3D globe with live atmospheric lighting.`;
+  }
+
+  if (q.includes('radar') || q.includes('rain') || q.includes('weather')) {
+    return `Global Weather Radar Status:\n\n• Precipitation sweeps active in Western Europe and Southeast Asia.\n• Tokyo & London open-air venues report clear evening conditions.\n• Tap the 🌧 radar button below to project the real-time weather layer over the 3D globe.`;
+  }
+
+  const matches = events.filter(
+    (e) =>
+      e.title.toLowerCase().includes(q) ||
+      e.city.toLowerCase().includes(q) ||
+      e.category.toLowerCase().includes(q)
+  );
+
+  if (matches.length > 0) {
+    const list = matches
+      .slice(0, 3)
+      .map((m) => `• ${m.title} (${m.city}, ${m.country}) · ${m.date}`)
+      .join('\n');
+    return `Found ${matches.length} experience${matches.length > 1 ? 's' : ''} matching "${query}":\n\n${list}\n\nTap on any event to center the 3D globe and inspect deep links.`;
+  }
+
+  return `I searched 149k live experiences for "${query}".\n\nFound curated options across live music, culture, and interactive gatherings. I've logged this to your Recents in the chat sidebar so you can revisit updates or inspect globe pins at any time.`;
+}
 
 export default function App() {
-  const [telemetry, setTelemetry] = useState<EcosystemTelemetry>(INITIAL_TELEMETRY);
-  const [events, setEvents] = useState<TerrariumEvent[]>(INITIAL_MOCK_EVENTS);
-  const [nodes, setNodes] = useState<GlobeNode[]>(INITIAL_GLOBE_NODES);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [isAutoRotating, setIsAutoRotating] = useState(true);
-  const [isBezelMode, setIsBezelMode] = useState(false);
-  const [globePosition, setGlobePosition] = useState<GlobeLayoutPosition>('Top');
+  const { triggerPanelToggle, triggerGlobePin, triggerNav } = useHaptic();
 
-  // Global Lighting State Controller
-  const [lightingState, setLightingState] = useState<GlobalLightingState>({
-    mode: 'night',
-    progress: 0,
-    autoCycle: false,
-    cycleDurationSec: 28,
-  });
+  // State
+  const [events, setEvents] = useState<EventItem[]>(EVENTS_DATA);
+  const [activeMood, setActiveMood] = useState<Mood>(MOODS[0]); // Electric Pulse default
+  const [activeNav, setActiveNav] = useState<ActiveNav>('home');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
+  const [inspectEvent, setInspectEvent] = useState<EventItem | null>(null);
+  const [streetViewTarget, setStreetViewTarget] = useState<StreetViewTarget | null>(null);
+  const [likedEventIds, setLikedEventIds] = useState<Set<string>>(
+    new Set(['ev-1', 'ev-3'])
+  );
+  const [isFeedCollapsed, setIsFeedCollapsed] = useState(false);
 
-  const isDay = lightingState.mode === 'day';
+  // DeepSeek-style Chat state
+  const [conversations, setConversations] = useState<ChatConversation[]>(INITIAL_CONVERSATIONS);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
-  // Sync data-theme attribute on root element for CSS variables & transitions
+  // Netlify MCP connection state
+  const [mcpServerInfo, setMcpServerInfo] = useState<McpServerInfo | null>(null);
+  const [isMcpConnecting, setIsMcpConnecting] = useState(false);
+  const [mcpModalOpen, setMcpModalOpen] = useState(false);
+
+  // Controls state
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
+  const [radarActive, setRadarActive] = useState(false);
+  const [alertsActive, setAlertsActive] = useState(false);
+  const [perspective, setPerspective] = useState<CameraPerspective>('3D');
+
+  // Desktop Preview Utility Bar frame mode
+  const [showFrameBezel, setShowFrameBezel] = useState(true);
+
+  // MapLibre map & Pins state
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [map, setMap] = useState<maplibregl.Map | null>(null);
+  const [topViewMode, setTopViewMode] = useState<'globe' | 'map' | 'photorealistic-3d'>('globe');
+
+  // Initialize MapLibre Map instance
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', lightingState.mode);
-  }, [lightingState.mode]);
+    if (!mapContainerRef.current) return;
+    initMapLibreWorker();
+    let mapInstance: maplibregl.Map | null = null;
+    try {
+      mapInstance = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: {
+          version: 8,
+          sources: {
+            'carto-dark': {
+              type: 'raster',
+              tiles: [
+                'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+              ],
+              tileSize: 256,
+              attribution: '&copy; OpenStreetMap',
+            },
+          },
+          layers: [
+            {
+              id: 'carto-dark',
+              type: 'raster',
+              source: 'carto-dark',
+            },
+          ],
+        },
+        center: [139.6917, 35.6895], // Tokyo by default
+        zoom: 1.5,
+        attributionControl: false,
+      });
 
-  // Diurnal Auto-Cycle Loop
+      mapInstance.on('error', (e) => {
+        if (e && e.error && e.error.message && e.error.message.includes('Worker')) {
+          console.warn('[MapLibre Worker]:', e.error.message);
+          return;
+        }
+        console.warn('[MapLibre]:', e);
+      });
+
+      mapInstance.on('load', () => {
+        setMap(mapInstance);
+        (window as any).map = mapInstance;
+        (window as any).__freshaddy_map = mapInstance;
+        // Populate initial event pins to map
+        addEventPinsToMap(mapInstance, events);
+      });
+    } catch (err) {
+      console.warn('MapLibre init error:', err);
+    }
+
+    return () => {
+      if (mapInstance) {
+        mapInstance.remove();
+      }
+    };
+  }, []);
+
+  // Sync global view mode & listen for toggle-view-mode events
   useEffect(() => {
-    if (!lightingState.autoCycle) return;
-    let animId: number;
-    const startTime = performance.now();
-    const durationMs = lightingState.cycleDurationSec * 1000;
-
-    const tick = (now: number) => {
-      const elapsed = (now - startTime) % durationMs;
-      // Smooth sinusoidal oscillation between 0 and 1
-      const normalized = (1 - Math.cos((elapsed / durationMs) * Math.PI * 2)) / 2;
-      const currentMode: LightingMode = normalized >= 0.5 ? 'day' : 'night';
-
-      setLightingState((prev) => ({
-        ...prev,
-        progress: normalized,
-        mode: currentMode,
-      }));
-
-      // Dynamically interpolate telemetry numbers
-      setTelemetry((prev) => ({
-        ...prev,
-        photoperiod: currentMode,
-        temperature: Number((19.8 + normalized * 4.8).toFixed(1)),
-        humidity: Math.round(82 - normalized * 14),
-      }));
-
-      animId = requestAnimationFrame(tick);
+    (window as any).__freshaddy_current_mode = topViewMode;
+    const handleToggleMode = (e: Event) => {
+      const custom = e as CustomEvent<{ mode: 'globe' | 'map' | 'photorealistic-3d' }>;
+      if (custom.detail?.mode) {
+        setTopViewMode(custom.detail.mode);
+        if (custom.detail.mode === 'map' && map) {
+          setTimeout(() => map.resize(), 50);
+        }
+      }
     };
 
-    animId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animId);
-  }, [lightingState.autoCycle, lightingState.cycleDurationSec]);
-
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
-
-  const handleSelectNode = (node: GlobeNode) => {
-    setSelectedNodeId((prev) => (prev === node.id ? null : node.id));
-  };
-
-  const handleClearSelectedNode = () => {
-    setSelectedNodeId(null);
-  };
-
-  const handleToggleAutoRotate = () => {
-    setIsAutoRotating((prev) => !prev);
-  };
-
-  const handleToggleBezelMode = () => {
-    setIsBezelMode((prev) => !prev);
-  };
-
-  // Global lighting toggle handler
-  const handleToggleLightingMode = () => {
-    const nextMode: LightingMode = lightingState.mode === 'night' ? 'day' : 'night';
-    const nextProg = nextMode === 'day' ? 1 : 0;
-
-    setLightingState((prev) => ({
-      ...prev,
-      mode: nextMode,
-      progress: nextProg,
-    }));
-
-    // Update telemetry state
-    setTelemetry((prev) => ({
-      ...prev,
-      photoperiod: nextMode,
-      temperature: nextMode === 'day' ? 24.6 : 19.8,
-      humidity: nextMode === 'day' ? 68 : 82,
-      climateState: nextMode === 'day' ? 'sunny' : 'mist',
-      bcpRate: nextMode === 'day' ? 'BCP 340k • Solar 840µmol' : 'BCP 340k',
-    }));
-
-    // Append to live substrate events
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    const newEvt: TerrariumEvent = {
-      id: `evt-light-${Date.now()}`,
-      timestamp: timeStr,
-      source: 'Global Lighting Controller',
-      category: 'weather',
-      message:
-        nextMode === 'day'
-          ? 'Photoperiod transitioned to DAY: Solar photon flux active with bright cyan & white accents.'
-          : 'Photoperiod transitioned to NIGHT: Deep cosmic indigo with electric magenta accents.',
-      level: 'success',
+    window.addEventListener('freshaddy:toggle-view-mode', handleToggleMode);
+    return () => {
+      window.removeEventListener('freshaddy:toggle-view-mode', handleToggleMode);
     };
-    setEvents((prev) => [newEvt, ...prev]);
+  }, [topViewMode, map]);
+
+  // Listen for the card open CustomEvent from mapPins:
+  useEffect(() => {
+    const handleOpenCard = (e: Event) => {
+      const customEv = e as CustomEvent<EventItem>;
+      if (customEv.detail) {
+        setSelectedEvent(customEv.detail);
+        setInspectEvent(customEv.detail);
+        // Programmatically fly camera to selected event coordinate
+        if (typeof customEv.detail.lat === 'number' && typeof customEv.detail.lng === 'number') {
+          flyCameraToCoordinate({
+            lat: customEv.detail.lat,
+            lng: customEv.detail.lng,
+            tilt: 60,
+            range: 1200,
+          });
+        }
+      }
+    };
+
+    window.addEventListener('freshaddy:open-id-card', handleOpenCard);
+    return () => {
+      window.removeEventListener('freshaddy:open-id-card', handleOpenCard);
+    };
+  }, []);
+
+  // Fly map when selectedEvent changes
+  useEffect(() => {
+    if (map && selectedEvent) {
+      try {
+        map.flyTo({
+          center: [selectedEvent.lng, selectedEvent.lat],
+          zoom: Math.max(map.getZoom(), 3.5),
+          speed: 1.2,
+          essential: true,
+        });
+      } catch {
+        // safe
+      }
+    }
+  }, [map, selectedEvent]);
+
+  // Adjust map pitch/bearing according to 3-segment camera toggle
+  useEffect(() => {
+    if (!map) return;
+    try {
+      if (perspective === '3D') {
+        map.easeTo({ pitch: 45, bearing: 10, duration: 400 });
+      } else {
+        map.easeTo({ pitch: 0, bearing: 0, duration: 400 });
+      }
+    } catch {
+      // safe
+    }
+  }, [map, perspective]);
+
+  // Connect to Netlify MCP on startup
+  const connectToMcp = useCallback(async () => {
+    setIsMcpConnecting(true);
+    try {
+      const info = await getMcpServerStatus();
+      setMcpServerInfo(info);
+    } catch (err) {
+      console.warn('Could not establish initial MCP connection to Netlify:', err);
+    } finally {
+      setIsMcpConnecting(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    connectToMcp();
+  }, [connectToMcp]);
+
+  // Synchronize deep links on page load
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const eventIdFromUrl = params.get('event');
+      if (eventIdFromUrl) {
+        const found = EVENTS_DATA.find((e) => e.id === eventIdFromUrl);
+        if (found) {
+          setSelectedEvent(found);
+          setInspectEvent(found);
+        }
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+  }, []);
+
+  // Update browser URL query parameter when modal opens or closes
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (inspectEvent) {
+        url.searchParams.set('event', inspectEvent.id);
+      } else {
+        url.searchParams.delete('event');
+      }
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // Ignore history replace errors
+    }
+  }, [inspectEvent]);
+
+  // Handlers
+  const handleSelectEvent = (event: EventItem) => {
+    triggerGlobePin();
+    setSelectedEvent(event);
+    setInspectEvent(event);
   };
 
-  // Granular slider progress handler
-  const handleSetLightingProgress = (progress: number) => {
-    const clamped = Math.max(0, Math.min(1, progress));
-    const nextMode: LightingMode = clamped >= 0.5 ? 'day' : 'night';
+  const handleAddNewDiscoveredEvents = (results: EventItem[]) => {
+    setEvents((prev) => {
+      const existingIds = new Set(prev.map((e) => e.id));
+      const fresh = results.filter((e) => !existingIds.has(e.id));
+      // Prepend fresh events to the top of feed so live updates are immediately visible
+      return fresh.length > 0 ? [...fresh, ...prev] : prev;
+    });
 
-    setLightingState((prev) => ({
-      ...prev,
-      progress: clamped,
-      mode: nextMode,
-    }));
-
-    setTelemetry((prev) => ({
-      ...prev,
-      photoperiod: nextMode,
-      temperature: Number((19.8 + clamped * 4.8).toFixed(1)),
-      humidity: Math.round(82 - clamped * 14),
-    }));
-  };
-
-  const handleToggleAutoCycle = () => {
-    setLightingState((prev) => ({
-      ...prev,
-      autoCycle: !prev.autoCycle,
-    }));
-  };
-
-  // Determine layout class for main wrapper based on globePosition
-  const getLayoutClasses = (pos: GlobeLayoutPosition) => {
-    switch (pos) {
-      case 'Top':
-        return 'flex-col';
-      case 'Low':
-        return 'flex-col-reverse';
-      case 'Left':
-        return 'flex-row';
-      case 'Right':
-        return 'flex-row-reverse';
+    if (map) {
+      addEventPinsToMap(map, results);
     }
   };
 
-  const isVerticalLayout = globePosition === 'Top' || globePosition === 'Low';
+  // Pull-to-refresh handler for HomeFeed: queries server endpoint and updates globe & feed
+  const handleRefreshHomeFeed = useCallback(async (): Promise<{ count: number; events: EventItem[] }> => {
+    try {
+      const res = await fetch('/api/events/live');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.events && Array.isArray(data.events) && data.events.length > 0) {
+          handleAddNewDiscoveredEvents(data.events);
+          return { count: data.events.length, events: data.events };
+        }
+      }
+    } catch (err) {
+      console.warn('Live events endpoint fetch error, applying fallback broadcast:', err);
+    }
+
+    // High fidelity fallback broadcast ensuring resilient offline/standalone execution
+    const fallbackTimestamp = Date.now();
+    const fallbackEvents: EventItem[] = [
+      {
+        id: `live-ev-kyoto-${fallbackTimestamp}`,
+        title: 'Kyoto Arashiyama Lantern Soundwave',
+        city: 'Kyoto',
+        country: 'Japan',
+        date: 'Tonight · Live Now',
+        category: 'Ambient & Spatial',
+        tags: ['#LiveNow', '#Lanterns', '#Ambient'],
+        venue: 'Arashiyama Bamboo Grove / Tenryu-ji',
+        lat: 35.0116,
+        lng: 135.6778,
+        image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80',
+        description: 'Bespoke hydrophone recordings and traditional koto acoustics reverberating across illuminated night bamboo canopies.',
+        attendees: 1420 + Math.floor(Math.random() * 50),
+        weather: 'Crisp evening · 16°C',
+        featured: true,
+      },
+      {
+        id: `live-ev-seoul-${fallbackTimestamp}`,
+        title: 'Seoul Hongdae Underground Bass Cypher',
+        city: 'Seoul',
+        country: 'South Korea',
+        date: 'Tonight · Broadcasting Live',
+        category: 'Bass & Cypher',
+        tags: ['#LiveNow', '#Bass', '#KUnderground'],
+        venue: 'Club Soap Seoul / Itaewon B1',
+        lat: 37.5348,
+        lng: 126.9946,
+        image: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&w=800&q=80',
+        description: 'Live multi-mic cypher and heavy 808 subs streamed with binaural spatial audio directly to connected globe nodes.',
+        attendees: 2180 + Math.floor(Math.random() * 70),
+        weather: 'Clear night · 15°C',
+        featured: true,
+      },
+    ];
+
+    handleAddNewDiscoveredEvents(fallbackEvents);
+    return { count: fallbackEvents.length, events: fallbackEvents };
+  }, [map]);
+
+  const handleToggleLike = (e: React.MouseEvent, event: EventItem) => {
+    e.stopPropagation();
+    setLikedEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(event.id)) {
+        next.delete(event.id);
+      } else {
+        next.add(event.id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleTheme = () => {
+    setThemeMode((prev) => {
+      if (prev === 'dark') return 'obsidian';
+      if (prev === 'obsidian') return 'aurora';
+      return 'dark';
+    });
+  };
+
+  const handleToggleRadar = () => {
+    setRadarActive((prev) => !prev);
+  };
+
+  const handleToggleAlerts = () => {
+    setAlertsActive((prev) => !prev);
+  };
+
+  // Search to Chat Flow
+  const handleSearchToChat = (query: string) => {
+    if (!query.trim()) return;
+    const trimmed = query.trim();
+    const convId = `conv-${Date.now()}`;
+    const aiAnswer = generateAiResponse(trimmed, events);
+
+    searchMcpEventsDetailed({ query: trimmed, domain: 'all', limit: 15 })
+      .then((mcpResponse) => {
+        if (mcpResponse?.events && mcpResponse.events.length > 0) {
+          const results = mcpResponse.events;
+          handleAddNewDiscoveredEvents(results);
+          if (map) {
+            addEventPinsToMap(map, results);
+          }
+        }
+      })
+      .catch((err) => console.warn('MCP search during chat query:', err));
+
+    const newConv: ChatConversation = {
+      id: convId,
+      title: trimmed.length > 28 ? `${trimmed.slice(0, 28)}...` : trimmed,
+      pinned: false,
+      updatedAt: 'Just now',
+      messages: [
+        {
+          id: `msg-${Date.now()}-u`,
+          sender: 'user',
+          text: trimmed,
+          timestamp: 'Just now',
+        },
+        {
+          id: `msg-${Date.now()}-a`,
+          sender: 'assistant',
+          text: aiAnswer,
+          timestamp: 'Just now',
+        },
+      ],
+    };
+
+    setConversations((prev) => [newConv, ...prev]);
+    setActiveConversationId(convId);
+    setActiveNav('chat');
+    setIsFeedCollapsed(false);
+    setSearchQuery('');
+  };
+
+  // Chat conversation actions
+  const handleSendMessageInChat = (conversationId: string, messageText: string) => {
+    const aiAnswer = generateAiResponse(messageText, events);
+    const userMsg = {
+      id: `msg-${Date.now()}-u`,
+      sender: 'user' as const,
+      text: messageText,
+      timestamp: 'Just now',
+    };
+    const assistantMsg = {
+      id: `msg-${Date.now()}-a`,
+      sender: 'assistant' as const,
+      text: aiAnswer,
+      timestamp: 'Just now',
+    };
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              updatedAt: 'Just now',
+              messages: [...c.messages, userMsg, assistantMsg],
+            }
+          : c
+      )
+    );
+  };
+
+  const handleNewChat = (initialQuery?: string) => {
+    const convId = `conv-${Date.now()}`;
+    const initialTitle = initialQuery ? initialQuery.slice(0, 26) : 'New Experience Chat';
+    const newConv: ChatConversation = {
+      id: convId,
+      title: initialTitle,
+      pinned: false,
+      updatedAt: 'Just now',
+      messages: initialQuery
+        ? [
+            {
+              id: `msg-${Date.now()}-u`,
+              sender: 'user',
+              text: initialQuery,
+              timestamp: 'Just now',
+            },
+            {
+              id: `msg-${Date.now()}-a`,
+              sender: 'assistant',
+              text: generateAiResponse(initialQuery, events),
+              timestamp: 'Just now',
+            },
+          ]
+        : [
+            {
+              id: `msg-${Date.now()}-a`,
+              sender: 'assistant',
+              text: 'Hello! I am FreshAddy, your 3D globe discovery assistant. Ask me about live music festivals, conventions, sports derbies, or weather radar around the world.',
+              timestamp: 'Just now',
+            },
+          ],
+    };
+
+    setConversations((prev) => [newConv, ...prev]);
+    setActiveConversationId(convId);
+    setActiveNav('chat');
+  };
+
+  const handleTogglePin = (id: string) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c))
+    );
+  };
+
+  const handleDeleteConversation = (id: string) => {
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    if (activeConversationId === id) {
+      setActiveConversationId(null);
+    }
+  };
+
+  const handleRenameConversation = (id: string, newTitle: string) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, title: newTitle } : c))
+    );
+  };
 
   return (
-    <div
-      className={`min-h-screen w-full text-slate-100 flex flex-col items-center justify-between overflow-x-hidden relative theme-transition ${
-        isDay ? 'bg-[#07192f]' : 'bg-[#050714]'
-      }`}
-    >
-      {/* Ambient background glows with smooth crossfade */}
-      <div
-        className={`absolute top-0 left-1/4 w-[650px] h-[650px] rounded-full blur-[150px] pointer-events-none transition-all duration-1000 ${
-          isDay ? 'bg-cyan-400/20 opacity-100' : 'bg-cyan-600/5 opacity-60'
-        }`}
-      />
-      <div
-        className={`absolute bottom-0 right-1/4 w-[550px] h-[550px] rounded-full blur-[140px] pointer-events-none transition-all duration-1000 ${
-          isDay ? 'bg-white/10 opacity-90' : 'bg-fuchsia-600/12 opacity-80'
-        }`}
-      />
+    <div className="min-h-screen w-full bg-[#05070e] text-slate-100 flex flex-col items-center justify-center p-0 sm:p-4 select-none font-sans overflow-x-hidden">
+      {/* Desktop Preview Utility Bar */}
+      <aside
+        aria-label="Screen Viewport Controls"
+        className="hidden sm:flex items-center justify-between w-full max-w-[420px] mb-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 backdrop-blur-md"
+      >
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="font-semibold text-slate-200">FreshAddy 3D Globe</span>
+          <span className="text-slate-500">· 390×844</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {/* Netlify MCP Badge button */}
+          <button
+            onClick={() => setMcpModalOpen(true)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-900/60 transition-colors cursor-pointer text-[10px] font-mono"
+            title="Inspect MCP endpoint (/api/mcp)"
+          >
+            <Radio size={10} className="text-cyan-400 animate-pulse" />
+            <span>MCP 149k</span>
+          </button>
 
-      {/* Top Header with title capsule, lighting controller, and telemetry */}
-      <div className="w-full max-w-7xl">
-        <Header
-          bcpRate={telemetry.bcpRate}
-          isBezelMode={isBezelMode}
-          onToggleBezelMode={handleToggleBezelMode}
-          title="FreshAddy 3D"
-          subTitle="Particle Vector Sphere"
-          lightingState={lightingState}
-          onToggleLightingMode={handleToggleLightingMode}
-          onSetLightingProgress={handleSetLightingProgress}
-          onToggleAutoCycle={handleToggleAutoCycle}
-        />
-      </div>
+          <button
+            onClick={() => setShowFrameBezel(!showFrameBezel)}
+            className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+            title="Toggle Smartphone Bezel"
+          >
+            {showFrameBezel ? <Smartphone size={12} /> : <Maximize2 size={12} />}
+            <span>{showFrameBezel ? 'Bezel' : 'Frameless'}</span>
+          </button>
+        </div>
+      </aside>
 
-      {/* Main Viewport Shell: Supports 16:9 widescreen or Phone Bezel frame */}
-      <main className="flex-1 w-full flex items-center justify-center p-2 sm:p-4 md:p-6 z-10">
-        <ResponsiveShell
-          isBezelMode={isBezelMode}
-          isDay={isDay}
-          globeComponent={
-            isBezelMode ? (
-              <ParticleGlobe
-                nodes={nodes}
-                selectedNodeId={selectedNodeId}
-                onSelectNode={handleSelectNode}
-                isAutoRotating={isAutoRotating}
-                onToggleAutoRotate={handleToggleAutoRotate}
-                lightingMode={lightingState.mode}
-                lightingProgress={lightingState.progress}
-                globePosition={globePosition}
-                onSetGlobePosition={setGlobePosition}
-              />
-            ) : (
-                <ParticleGlobe
-                    nodes={nodes}
-                    selectedNodeId={selectedNodeId}
-                    onSelectNode={handleSelectNode}
-                    isAutoRotating={isAutoRotating}
-                    onToggleAutoRotate={handleToggleAutoRotate}
-                    lightingMode={lightingState.mode}
-                    lightingProgress={lightingState.progress}
-                    globePosition={globePosition}
-                    onSetGlobePosition={setGlobePosition}
-                />
-            )
-          }
-          panelComponent={
-            <RightPanel
-              telemetry={telemetry}
+      {/* Mobile Screen Container: Exactly 390×844 */}
+      <main
+        className={`relative flex flex-col overflow-hidden bg-slate-950 transition-all duration-300 ${
+          showFrameBezel
+            ? 'w-full max-w-[390px] h-[844px] sm:rounded-[44px] shadow-[0_0_60px_rgba(0,0,0,0.9),_0_0_40px_rgba(0,242,254,0.12)] border-[8px] border-slate-800/90 ring-1 ring-slate-700/60'
+            : 'w-full max-w-[390px] h-[844px] rounded-none sm:rounded-3xl shadow-2xl border border-slate-800'
+        }`}
+        style={{
+          boxShadow: showFrameBezel
+            ? `0 25px 60px -15px rgba(0,0,0,0.95), 0 0 35px ${activeMood.color}20`
+            : undefined,
+        }}
+      >
+        {/* iOS Phone Status Bar (Dynamic Island & Clock) */}
+        <PhoneStatusBar />
+
+        {/* 1. GLOBE & MAP — takes top ~40% of the screen OR expands to full/center screen when collapsed */}
+        <section
+          aria-label="3D Interactive Globe and Map"
+          className={`relative w-full transition-all duration-300 overflow-hidden bg-[#070c18] ${
+            isFeedCollapsed ? 'flex-1 h-full' : 'h-[40%] shrink-0'
+          }`}
+        >
+          {/* MapLibre Map instance for map pins and markers */}
+          <div
+            ref={mapContainerRef}
+            className={`absolute inset-0 transition-opacity duration-300 ${
+              topViewMode === 'map' ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'
+            }`}
+          />
+
+          {/* 3D Interactive Three.js Globe */}
+          <div
+            className={`absolute inset-0 transition-opacity duration-300 ${
+              topViewMode === 'globe' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+            }`}
+          >
+            <GlobeView
               events={events}
-              selectedNode={selectedNode}
-              onClearSelectedNode={handleClearSelectedNode}
-              onSelectNode={handleSelectNode}
-              allNodes={nodes}
-              lightingState={lightingState}
-              onToggleLightingMode={handleToggleLightingMode}
-              onSetLightingProgress={handleSetLightingProgress}
-              onToggleAutoCycle={handleToggleAutoCycle}
+              selectedEvent={selectedEvent}
+              onSelectEvent={handleSelectEvent}
+              activeMood={activeMood}
+              radarActive={radarActive}
+              perspective={perspective}
+              themeMode={themeMode}
             />
-          }
+          </div>
+
+          {/* Photorealistic Google 3D Map */}
+          {topViewMode === 'photorealistic-3d' && (
+            <div className="absolute inset-0 z-10 pointer-events-auto">
+              <GoogleMap3DView
+                selectedEvent={selectedEvent}
+                onSelectEvent={handleSelectEvent}
+                events={events}
+              />
+            </div>
+          )}
+
+          {/* Mood mover button floats at bottom-center of the globe */}
+          <div className="relative z-30">
+            <MoodMover
+              activeMood={activeMood}
+              onSelectMood={(mood) => setActiveMood(mood)}
+            />
+          </div>
+        </section>
+
+        {/* 2. SECTION AREA — COLLAPSIBLE WITH TOP HANDLE (similar to Google Maps app) */}
+        <section
+          aria-label="Section Content Panel"
+          className={`relative w-full transition-all duration-300 flex flex-col bg-slate-950 border-x-2 border-t-2 rounded-t-2xl shadow-2xl ${
+            isFeedCollapsed
+              ? 'h-8 shrink-0 overflow-hidden cursor-pointer'
+              : 'flex-1 min-h-0 overflow-hidden'
+          } ${
+            activeNav === 'home'
+              ? 'border-purple-500 shadow-[inset_0_0_18px_rgba(168,85,247,0.35),0_0_24px_rgba(168,85,247,0.3)]'
+              : activeNav === 'play'
+              ? 'border-yellow-400 shadow-[inset_0_0_20px_rgba(250,204,21,0.4),0_0_28px_rgba(250,204,21,0.35)]'
+              : activeNav === 'search'
+              ? 'border-emerald-400 shadow-[inset_0_0_18px_rgba(52,211,153,0.35),0_0_24px_rgba(52,211,153,0.3)]'
+              : activeNav === 'chat'
+              ? 'border-cyan-400 shadow-[inset_0_0_18px_rgba(34,211,238,0.35),0_0_24px_rgba(34,211,238,0.3)]'
+              : 'border-rose-500 shadow-[inset_0_0_20px_rgba(244,63,94,0.4),0_0_28px_rgba(244,63,94,0.35)]'
+          }`}
+        >
+          {/* Top Grab Handle to Collapse / Expand */}
+          <div
+            onClick={() => {
+              triggerPanelToggle();
+              setIsFeedCollapsed((prev) => !prev);
+            }}
+            className={`w-full flex flex-col items-center justify-center ${
+              isFeedCollapsed ? 'py-1' : 'pt-2 pb-1'
+            } cursor-pointer group hover:bg-slate-900/60 select-none shrink-0`}
+            title={isFeedCollapsed ? 'Expand Feed' : 'Collapse Feed to Full Globe'}
+          >
+            {isFeedCollapsed && (
+              <ChevronUp size={12} className="text-slate-400 group-hover:text-cyan-300 -mb-0.5 animate-bounce" />
+            )}
+            <div
+              className={`w-12 h-1.5 rounded-full transition-all duration-200 ${
+                isFeedCollapsed
+                  ? 'bg-slate-300 shadow-[0_0_8px_rgba(255,255,255,0.7)] group-hover:bg-white'
+                  : 'bg-slate-600 group-hover:bg-slate-400'
+              }`}
+            />
+          </div>
+
+          {/* Feed Content (shown when not collapsed) */}
+          {!isFeedCollapsed && (
+            <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
+              {/* Home Icon: Infinite scrolling feed of ID cards */}
+              {activeNav === 'home' && (
+                <HomeFeed
+                  events={events}
+                  selectedEvent={selectedEvent}
+                  likedEventIds={likedEventIds}
+                  onSelectEvent={handleSelectEvent}
+                  onToggleLike={handleToggleLike}
+                  onOpenStreetView={(target) => setStreetViewTarget(target)}
+                  onRefresh={handleRefreshHomeFeed}
+                />
+              )}
+
+              {/* Play Icon: YouTube Clips of saved music festivals */}
+              {activeNav === 'play' && (
+                <FestivalFeed
+                  videos={FESTIVAL_VIDEOS}
+                  onOpenStreetView={(target) => setStreetViewTarget(target)}
+                />
+              )}
+
+              {/* Search Icon: Quick discover & semantic search */}
+              {activeNav === 'search' && (
+                <SearchView
+                  events={events}
+                  onSelectEvent={handleSelectEvent}
+                  onSubmitSearch={handleSearchToChat}
+                />
+              )}
+
+              {/* Chat Icon: DeepSeek-style AI chat panel */}
+              {activeNav === 'chat' && (
+                <ChatView
+                  conversations={conversations}
+                  activeConversationId={activeConversationId}
+                  onSelectConversation={(id) => setActiveConversationId(id)}
+                  onSendMessage={handleSendMessageInChat}
+                  onNewChat={handleNewChat}
+                  onTogglePin={handleTogglePin}
+                  onDeleteConversation={handleDeleteConversation}
+                  onRenameConversation={handleRenameConversation}
+                  events={events}
+                />
+              )}
+
+              {/* Heart (Liked) Icon: List of liked ID cards */}
+              {activeNav === 'likes' && (
+                <SavedView
+                  events={events}
+                  likedEventIds={likedEventIds}
+                  selectedEvent={selectedEvent}
+                  onSelectEvent={handleSelectEvent}
+                  onToggleLike={handleToggleLike}
+                  onOpenStreetView={(target) => setStreetViewTarget(target)}
+                />
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* 3. BOTTOM CONTROLS */}
+        <BottomControls
+          activeNav={activeNav}
+          onNavChange={(nav) => {
+            triggerNav();
+            setActiveNav(nav);
+            setIsFeedCollapsed(false);
+          }}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onSubmitSearch={handleSearchToChat}
+          themeMode={themeMode}
+          onToggleTheme={handleToggleTheme}
+          radarActive={radarActive}
+          onToggleRadar={handleToggleRadar}
+          alertsActive={alertsActive}
+          onToggleAlerts={handleToggleAlerts}
+          perspective={perspective}
+          onChangePerspective={setPerspective}
+          likedCount={likedEventIds.size}
+        />
+
+        {/* Home Indicator line (iOS native cue) */}
+        <div className="w-full bg-slate-950 flex justify-center pb-2 pt-0 shrink-0">
+          <div className="w-32 h-1 bg-slate-700/80 rounded-full" />
+        </div>
+
+        {/* Event Detail Sheet Modal */}
+        <EventModal
+          event={inspectEvent}
+          isLiked={inspectEvent ? likedEventIds.has(inspectEvent.id) : false}
+          onToggleLike={handleToggleLike}
+          onClose={() => setInspectEvent(null)}
+          onCenterOnGlobe={(ev) => {
+            setSelectedEvent(ev);
+          }}
+          onOpenStreetView={(target) => setStreetViewTarget(target)}
+        />
+
+        {/* Netlify MCP Connection Info Modal */}
+        <McpInfoModal
+          isOpen={mcpModalOpen}
+          onClose={() => setMcpModalOpen(false)}
+          serverInfo={mcpServerInfo}
+          isLoading={isMcpConnecting}
+          onRefresh={connectToMcp}
+          onQuickQuery={(q) => handleSearchToChat(q)}
+        />
+
+        {/* Street View Slide-Up Panel (direct center 1/3 bottom screen with top handle) */}
+        <StreetViewPanel
+          target={streetViewTarget}
+          onClose={() => setStreetViewTarget(null)}
         />
       </main>
-
-      {/* Subtle bottom note */}
-      <footer className="w-full text-center py-2 text-[10px] font-mono text-slate-500">
-        FreshAddy • Global Lighting State Controller Active ({isDay ? 'DAY: Bright Cyan/White' : 'NIGHT: Deep Indigo/Magenta'})
-      </footer>
     </div>
   );
 }
