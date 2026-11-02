@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GlobeView } from './components/GlobeView';
-import { MoodMover } from './components/MoodMover';
 import { HomeFeed } from './components/HomeFeed';
 import { SearchView } from './components/SearchView';
 import { ChatView, ChatConversation } from './components/ChatView';
@@ -224,7 +223,7 @@ export default function App() {
   const isTouchMultiRef = useRef(false);
 
   // Landscape-wide layout flag (same query as the landscape CSS block in index.css); only used for the hint wording
-  const LANDSCAPE_QUERY = '(orientation: landscape) and (min-width: 768px)';
+  const LANDSCAPE_QUERY = '(min-width: 768px)';
   const [isLandscapeWide, setIsLandscapeWide] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(LANDSCAPE_QUERY).matches
   );
@@ -841,8 +840,8 @@ export default function App() {
             }`}
             style={{
               transform:
-                isSwapped && (sectionHeights.card > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
-                  ? `translateY(${sectionHeights.card > 0 ? sectionHeights.card : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.6 : 415)}px)`
+                !isLandscapeWide && isSwapped && (sectionHeights.card > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
+                  ? `translateY(${sectionHeights.card > 0 ? sectionHeights.card : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.6 : 472)}px)`
                   : 'translateY(0px)',
               transition: 'transform 450ms cubic-bezier(0.25, 1, 0.5, 1)',
               zIndex: isSwapped ? 25 : 10,
@@ -883,23 +882,15 @@ export default function App() {
                 />
               </div>
             )}
-
-            {/* Mood mover button floats at bottom-center of the globe */}
-            <div className="relative z-30">
-              <MoodMover
-                activeMood={activeMood}
-                onSelectMood={(mood) => setActiveMood(mood)}
-              />
-            </div>
           </section>
 
-          {/* 2. SECTION AREA — COLLAPSIBLE WITH TOP HANDLE (similar to Google Maps app) */}
+          {/* 2. SECTION AREA — COLLAPSIBLE WITH TOP HANDLE (includes Nav Bar & Slide-Up Sheets) */}
           <section
             ref={cardSectionRef}
             aria-label="Section Content Panel"
             className={`app-feed relative w-full flex flex-col bg-slate-950 border-x-2 border-t-2 rounded-t-2xl shadow-2xl ${
               isFeedCollapsed
-                ? 'h-8 shrink-0 overflow-hidden cursor-pointer'
+                ? 'shrink-0 cursor-pointer'
                 : 'flex-1 min-h-0 overflow-hidden'
             } ${
               activeNav === 'home'
@@ -914,8 +905,8 @@ export default function App() {
             }`}
             style={{
               transform:
-                isSwapped && (sectionHeights.globe > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
-                  ? `translateY(-${sectionHeights.globe > 0 ? sectionHeights.globe : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.4 : 277)}px)`
+                !isLandscapeWide && isSwapped && (sectionHeights.globe > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
+                  ? `translateY(-${sectionHeights.globe > 0 ? sectionHeights.globe : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.4 : 313)}px)`
                   : 'translateY(0px)',
               transition: 'transform 450ms cubic-bezier(0.25, 1, 0.5, 1)',
               zIndex: isSwapped ? 10 : 25,
@@ -1005,47 +996,47 @@ export default function App() {
                 )}
               </div>
             )}
+
+            {/* 3. BOTTOM CONTROLS (Moves with section area so it sits below feed when swapped to top) */}
+            <div className="app-controls shrink-0">
+              <BottomControls
+                activeNav={activeNav}
+                onNavChange={(nav) => {
+                  triggerNav();
+                  setActiveNav(nav);
+                  setIsFeedCollapsed(false);
+                }}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onSubmitSearch={handleSearchToChat}
+                likedCount={likedEventIds.size}
+              />
+            </div>
+
+            {/* Home Indicator line (iOS native cue) */}
+            <div className="app-homeind w-full bg-slate-950 flex justify-center pb-2 pt-0 shrink-0">
+              <div className="w-32 h-1 bg-slate-700/80 rounded-full" />
+            </div>
+
+            {/* Event Detail Sheet Modal (expands upward from bottom of section) */}
+            <EventModal
+              event={inspectEvent}
+              isLiked={inspectEvent ? likedEventIds.has(inspectEvent.id) : false}
+              onToggleLike={handleToggleLike}
+              onClose={() => setInspectEvent(null)}
+              onCenterOnGlobe={(ev) => {
+                setSelectedEvent(ev);
+              }}
+              onOpenStreetView={(target) => setStreetViewTarget(target)}
+            />
+
+            {/* Street View Slide-Up Panel (expands upward from bottom of section) */}
+            <StreetViewPanel
+              target={streetViewTarget}
+              onClose={() => setStreetViewTarget(null)}
+            />
           </section>
         </div>
-
-        {/* 3. BOTTOM CONTROLS */}
-        <div className="app-controls">
-        <BottomControls
-          activeNav={activeNav}
-          onNavChange={(nav) => {
-            triggerNav();
-            setActiveNav(nav);
-            setIsFeedCollapsed(false);
-          }}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onSubmitSearch={handleSearchToChat}
-          likedCount={likedEventIds.size}
-        />
-        </div>
-
-        {/* Home Indicator line (iOS native cue) */}
-        <div className="app-homeind w-full bg-slate-950 flex justify-center pb-2 pt-0 shrink-0">
-          <div className="w-32 h-1 bg-slate-700/80 rounded-full" />
-        </div>
-
-        {/* Event Detail Sheet Modal */}
-        <EventModal
-          event={inspectEvent}
-          isLiked={inspectEvent ? likedEventIds.has(inspectEvent.id) : false}
-          onToggleLike={handleToggleLike}
-          onClose={() => setInspectEvent(null)}
-          onCenterOnGlobe={(ev) => {
-            setSelectedEvent(ev);
-          }}
-          onOpenStreetView={(target) => setStreetViewTarget(target)}
-        />
-
-        {/* Street View Slide-Up Panel (direct center 1/3 bottom screen with top handle) */}
-        <StreetViewPanel
-          target={streetViewTarget}
-          onClose={() => setStreetViewTarget(null)}
-        />
       </main>
     </div>
   );

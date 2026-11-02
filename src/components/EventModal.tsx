@@ -59,7 +59,7 @@ export const EventModal: React.FC<EventModalProps> = ({
     <div
       role="dialog"
       aria-label="Event Detail Panel"
-      className="app-eventsheet absolute bottom-0 left-0 right-0 z-40 h-[36%] min-h-[290px] max-h-[380px] bg-[#070c18] border-t-2 border-cyan-400/90 rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.9),0_0_25px_rgba(34,211,238,0.25)] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
+      className="app-eventsheet absolute bottom-0 left-0 right-0 z-40 h-[58%] min-h-[270px] max-h-[380px] bg-[#070c18] border-t-2 border-cyan-400/90 rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.9),0_0_25px_rgba(34,211,238,0.25)] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
     >
       {/* 1. Horizontal Handle in Center Top to Close (matching Street View slide-up) */}
       <div

@@ -314,16 +314,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
         }}
         className="group relative flex items-center gap-3 rounded-xl px-2 py-2 cursor-pointer transition-colors hover:bg-slate-800/50 focus:outline-none focus-visible:bg-slate-800/60 focus-visible:ring-2 focus-visible:ring-cyan-400/70"
       >
-        {/* Small round icon */}
-        <div
-          data-chat-icon
-          className={`w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 ${
-            isPinnedSection ? 'text-cyan-400' : 'text-cyan-400/60'
-          }`}
-        >
-          {isPinnedSection ? <Pin size={14} className="stroke-[2.5]" /> : <MessageSquare size={14} />}
-        </div>
-
         {/* Name + one-line preview */}
         <div className="flex-1 min-w-0 pr-5">
           {editingId === conv.id ? (
@@ -419,10 +409,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
       {/* Pinned section */}
       <div>
         <div className="flex items-center justify-between mb-1 px-2">
-          <div className="flex items-center gap-1.5 text-slate-400 font-medium text-[11px] tracking-wide">
+          <div className="flex items-center gap-1.5 text-cyan-400 font-medium text-[11px] tracking-wide">
             <Pin size={11} className="text-cyan-400" />
             <span>Pinned</span>
-            <span className="text-slate-500 font-normal">({pinnedConvs.length})</span>
           </div>
 
           <button
@@ -438,10 +427,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       {/* Recents section */}
       <div>
-        <div className="flex items-center gap-1.5 text-slate-400 font-medium text-[11px] tracking-wide mb-1 px-2">
-          <MessageSquare size={11} />
+        <div className="flex items-center gap-1.5 text-cyan-400 font-medium text-[11px] tracking-wide mb-1 px-2">
+          <MessageSquare size={11} className="text-cyan-400" />
           <span>Recents</span>
-          <span className="text-slate-500 font-normal">({recentConvs.length})</span>
         </div>
         <div className="space-y-0.5">{recentConvs.map((conv) => renderRow(conv, false))}</div>
       </div>
