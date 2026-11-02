@@ -17,8 +17,6 @@ import {
   EventItem,
   Mood,
   ActiveNav,
-  CameraPerspective,
-  ThemeMode,
   StreetViewTarget,
 } from './types';
 import { getMcpServerStatus, McpServerInfo, searchMcpEventsDetailed } from './services/mcpClient';
@@ -216,10 +214,7 @@ export default function App() {
   const [mcpModalOpen, setMcpModalOpen] = useState(false);
 
   // Controls state
-  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
-  const [radarActive, setRadarActive] = useState(false);
-  const [alertsActive, setAlertsActive] = useState(false);
-  const [perspective, setPerspective] = useState<CameraPerspective>('3D');
+
 
   // Desktop Preview Utility Bar frame mode
   const [showFrameBezel, setShowFrameBezel] = useState(true);
@@ -501,19 +496,6 @@ export default function App() {
     }
   }, [map, selectedEvent]);
 
-  // Adjust map pitch/bearing according to 3-segment camera toggle
-  useEffect(() => {
-    if (!map) return;
-    try {
-      if (perspective === '3D') {
-        map.easeTo({ pitch: 45, bearing: 10, duration: 400 });
-      } else {
-        map.easeTo({ pitch: 0, bearing: 0, duration: 400 });
-      }
-    } catch {
-      // safe
-    }
-  }, [map, perspective]);
 
   // Connect to Netlify MCP on startup
   const connectToMcp = useCallback(async () => {
@@ -655,21 +637,6 @@ export default function App() {
     });
   };
 
-  const handleToggleTheme = () => {
-    setThemeMode((prev) => {
-      if (prev === 'dark') return 'obsidian';
-      if (prev === 'obsidian') return 'aurora';
-      return 'dark';
-    });
-  };
-
-  const handleToggleRadar = () => {
-    setRadarActive((prev) => !prev);
-  };
-
-  const handleToggleAlerts = () => {
-    setAlertsActive((prev) => !prev);
-  };
 
   // Search to Chat Flow
   const handleSearchToChat = (query: string) => {
@@ -901,9 +868,9 @@ export default function App() {
                 selectedEvent={selectedEvent}
                 onSelectEvent={handleSelectEvent}
                 activeMood={activeMood}
-                radarActive={radarActive}
-                perspective={perspective}
-                themeMode={themeMode}
+                radarActive={false}
+                perspective={'3D'}
+                themeMode={'dark'}
               />
             </div>
 
@@ -1053,14 +1020,6 @@ export default function App() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onSubmitSearch={handleSearchToChat}
-          themeMode={themeMode}
-          onToggleTheme={handleToggleTheme}
-          radarActive={radarActive}
-          onToggleRadar={handleToggleRadar}
-          alertsActive={alertsActive}
-          onToggleAlerts={handleToggleAlerts}
-          perspective={perspective}
-          onChangePerspective={setPerspective}
           likedCount={likedEventIds.size}
         />
 

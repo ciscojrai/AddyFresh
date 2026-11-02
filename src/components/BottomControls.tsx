@@ -1,14 +1,10 @@
-import React from 'react';
-import { ActiveNav, CameraPerspective, ThemeMode } from '../types';
+import { ActiveNav } from '../types';
 import {
   Check,
   Play,
   Search,
   MessageSquare,
   Heart,
-  Sun,
-  CloudRain,
-  AlertTriangle,
 } from 'lucide-react';
 
 interface BottomControlsProps {
@@ -17,28 +13,15 @@ interface BottomControlsProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onSubmitSearch: (q: string) => void;
-  themeMode: ThemeMode;
-  onToggleTheme: () => void;
-  radarActive: boolean;
-  onToggleRadar: () => void;
-  alertsActive: boolean;
-  onToggleAlerts: () => void;
-  perspective: CameraPerspective;
-  onChangePerspective: (p: CameraPerspective) => void;
   likedCount: number;
 }
 
 export const BottomControls: React.FC<BottomControlsProps> = ({
   activeNav,
   onNavChange,
-  themeMode,
-  onToggleTheme,
-  radarActive,
-  onToggleRadar,
-  alertsActive,
-  onToggleAlerts,
-  perspective,
-  onChangePerspective,
+  searchQuery,
+  onSearchChange,
+  onSubmitSearch,
   likedCount,
 }) => {
   return (
@@ -115,74 +98,6 @@ export const BottomControls: React.FC<BottomControlsProps> = ({
           )}
         </button>
       </nav>
-
-      {/* Row 2: Secondary Filter Pills & Camera Segmented Switcher */}
-      <aside aria-label="Experience Filters and Camera Mode" className="flex items-center justify-between gap-1 text-[11px] font-medium pt-0.5">
-        {/* Theme pill */}
-        <button
-          onClick={onToggleTheme}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#0d1424] hover:bg-slate-800 border border-slate-800 text-slate-300 transition-colors cursor-pointer shrink-0"
-          title={`Active Theme: ${themeMode}`}
-        >
-          <Sun size={12} className="text-slate-400" />
-          <span>theme</span>
-        </button>
-
-        {/* Radar pill */}
-        <button
-          onClick={onToggleRadar}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all cursor-pointer shrink-0 ${
-            radarActive
-              ? 'bg-cyan-950/80 border-cyan-500/60 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.3)]'
-              : 'bg-[#0d1424] hover:bg-slate-800 border-slate-800 text-slate-300'
-          }`}
-          title="Toggle Weather Radar Overlay"
-        >
-          <CloudRain size={12} className={radarActive ? 'text-cyan-400' : 'text-slate-400'} />
-          <span>radar</span>
-        </button>
-
-        {/* Alerts pill */}
-        <button
-          onClick={onToggleAlerts}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all cursor-pointer shrink-0 ${
-            alertsActive
-              ? 'bg-[#2a1d0c] border-amber-500/70 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
-              : 'bg-[#0d1424] hover:bg-slate-800 border-slate-800 text-slate-300'
-          }`}
-          title="Toggle Alerts"
-        >
-          <AlertTriangle size={12} className={alertsActive ? 'text-amber-400' : 'text-slate-400'} />
-          <span>alerts</span>
-          {alertsActive && (
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          )}
-        </button>
-
-        {/* 3D / Sky either-or segmented toggle pill */}
-        <div className="flex items-center bg-[#090e1a] border border-slate-800 rounded-full p-0.5 shrink-0">
-          <button
-            onClick={() => onChangePerspective('3D')}
-            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
-              perspective === '3D'
-                ? 'bg-cyan-400 text-slate-950 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            3D
-          </button>
-          <button
-            onClick={() => onChangePerspective('Sky')}
-            className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
-              perspective === 'Sky'
-                ? 'bg-cyan-400 text-slate-950 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Sky
-          </button>
-        </div>
-      </aside>
     </footer>
   );
 };
