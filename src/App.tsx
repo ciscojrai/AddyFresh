@@ -270,11 +270,13 @@ export default function App() {
     window.addEventListener('resize', updateHeights);
 
     let ro: ResizeObserver | null = null;
-    if (middleContainerRef.current && typeof ResizeObserver !== 'undefined') {
+    if (typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(() => {
         updateHeights();
       });
-      ro.observe(middleContainerRef.current);
+      if (middleContainerRef.current) ro.observe(middleContainerRef.current);
+      if (globeSectionRef.current) ro.observe(globeSectionRef.current);
+      if (cardSectionRef.current) ro.observe(cardSectionRef.current);
     }
 
     return () => {
@@ -282,7 +284,7 @@ export default function App() {
       window.removeEventListener('resize', updateHeights);
       ro?.disconnect();
     };
-  }, [isFeedCollapsed]);
+  }, [isFeedCollapsed, effectiveDeviceMode]);
 
   // Reset swap when feed is explicitly collapsed so full globe view is consistent
   useEffect(() => {
@@ -310,7 +312,7 @@ export default function App() {
     lastCoordsRef.current = null;
   };
 
-  // Cross-axis pointer drag handler for the globe section
+  // Hold and drag UP to near the top edge to toggle swap (Phone, Landscape/Tablet, and TV)
   const handleGlobePointerDown = (e: React.PointerEvent<HTMLElement>) => {
     if (e.button !== 0 || isTouchMultiRef.current) return;
 
@@ -323,47 +325,39 @@ export default function App() {
 
       const currentX = moveEv.clientX;
       const currentY = moveEv.clientY;
-      const prevX = lastCoordsRef.current.x;
-      const prevY = lastCoordsRef.current.y;
       lastCoordsRef.current = { x: currentX, y: currentY };
 
-      // Incremental movement for this step
-      const stepDx = currentX - prevX;
-      const stepDy = currentY - prevY;
-
-      // Direction check uses fresh start coords each move:
-      // If the incremental move is predominantly horizontal, refresh start coordinates
-      if (Math.abs(stepDx) >= Math.abs(stepDy)) {
+      // If pointer moves lower than start (dragging down) or predominantly sideways, re-anchor start
+      if (currentY > startCoordsRef.current.y + 4) {
         startCoordsRef.current = { x: currentX, y: currentY };
         return;
       }
 
-      // Check displacement from the freshly established start coordinates
       const dy = currentY - startCoordsRef.current.y;
       const dx = currentX - startCoordsRef.current.x;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
 
-      // Horizontal check against fresh start coords: if horizontal motion dominates, refresh start coords
-      if (absX >= absY) {
+      if (absX > absY + 32) {
         startCoordsRef.current = { x: currentX, y: currentY };
         return;
       }
 
-      // Must be predominantly vertical drag
-      if (absY < absX * 1.2) return;
+      // Must be predominantly an upward drag (dy < 0)
+      if (dy >= 0 || absY < absX * 1.15) return;
 
-      // Deliberate upward drag past forty-pixel threshold triggers swap
-      if (!isSwappedRef.current && dy <= -40) {
+      const minUpwardTravel = isHorizontalSplit ? 85 : 48;
+      if (dy > -minUpwardTravel) return;
+
+      // Must reach near the top edge of the globe container (or top edge of screen)
+      const globeRect = globeSectionRef.current?.getBoundingClientRect();
+      const topEdgeZone = globeRect
+        ? globeRect.top + Math.min(72, Math.max(52, globeRect.height * 0.16))
+        : 72;
+
+      if (currentY <= topEdgeZone) {
         triggered = true;
-        setIsSwapped(true);
-        triggerPanelToggle();
-        cleanup();
-      }
-      // When swapped, deliberate downward (or upward) drag past forty-pixel threshold swaps back
-      else if (isSwappedRef.current && (dy >= 40 || dy <= -40)) {
-        triggered = true;
-        setIsSwapped(false);
+        setIsSwapped((prev) => !prev);
         triggerPanelToggle();
         cleanup();
       }
@@ -843,14 +837,8 @@ export default function App() {
             onTouchStart={handleGlobeTouchStart}
             onTouchEnd={handleGlobeTouchEnd}
             data-swap-state={isSwapped ? 'swapped' : 'normal'}
-            title={
-              isHorizontalSplit
-                ? 'Drag upward past threshold to swap sides'
-                : isSwapped
-                ? 'Drag downward past threshold to swap back'
-                : 'Drag upward past threshold to swap with bottom card'
-            }
-            className={`app-globe relative w-full overflow-hidden bg-[#070c18] ${
+            title="Hold and drag up to near the top edge to swap"
+            className={`app-globe relative w-full overflow-hidden touch-none bg-[#070c18] ${
               isFeedCollapsed ? 'flex-1 h-full' : 'h-[40%] shrink-0'
             }`}
             style={{
