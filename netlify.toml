@@ -1,0 +1,19 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/events/live"
+  to = "/.netlify/functions/live-events"
+  status = 200
+
+[[redirects]]
+  from = "/api/muse/chat"
+  to = "/.netlify/functions/muse-chat"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
