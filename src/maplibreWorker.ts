@@ -1,10 +1,9 @@
 import * as maplibregl from 'maplibre-gl';
-import workerScript from '../public/maplibre-gl-worker.js?raw';
+import workerScript from '../node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs?raw';
 
 /**
  * Configure MapLibre Web Worker safely in Vite / Cloud environments.
- * Uses an inline blob URL generated from the standalone IIFE worker bundle.
- * This prevents 404 / HTML-fallback errors from Vite dev server or relative worker URL resolution.
+ * Uses an inline blob URL generated from the real MapLibre worker bundle.
  */
 export function initMapLibreWorker(): void {
   if (typeof window === 'undefined') return;

@@ -159,17 +159,58 @@ html, body, #root {
   min-height: 260px;
 }
 
-/* Swapped (shared isSwapped state): globe on the LEFT, panel column on the RIGHT */
-.app-shell[data-device="landscape"] .app-main[data-swapped="true"] {
+/* Swapped / Globe Position overrides (Left | Right | Top | Bottom) */
+.app-shell[data-device="landscape"] .app-main[data-swapped="true"],
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="left"] {
   grid-template-columns: minmax(0, 1fr) max(360px, 40%);
 }
 .app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-globe,
-.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-globe {
+.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-globe,
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="left"] .app-globe,
+.app-shell[data-device="tv"] .app-main[data-globe-pos="left"] .app-globe {
   grid-column: 1;
+  grid-row: 1;
 }
 .app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-feed,
-.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-feed {
+.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-feed,
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="left"] .app-feed,
+.app-shell[data-device="tv"] .app-main[data-globe-pos="left"] .app-feed {
   grid-column: 2;
+  grid-row: 1;
+}
+
+/* Globe Position = TOP on Landscape / TV (Globe top 46%, Feed bottom 54%) */
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="top"],
+.app-shell[data-device="tv"] .app-main[data-globe-pos="top"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: 46% minmax(0, 1fr) !important;
+}
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="top"] .app-globe,
+.app-shell[data-device="tv"] .app-main[data-globe-pos="top"] .app-globe {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="top"] .app-feed,
+.app-shell[data-device="tv"] .app-main[data-globe-pos="top"] .app-feed {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+}
+
+/* Globe Position = BOTTOM on Landscape / TV (Feed top 54%, Globe bottom 46%) */
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="bottom"],
+.app-shell[data-device="tv"] .app-main[data-globe-pos="bottom"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: minmax(0, 1fr) 46% !important;
+}
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="bottom"] .app-feed,
+.app-shell[data-device="tv"] .app-main[data-globe-pos="bottom"] .app-feed {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+}
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="bottom"] .app-globe,
+.app-shell[data-device="tv"] .app-main[data-globe-pos="bottom"] .app-globe {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
 }
 
 /* ------------------------------------------------------------------
@@ -180,7 +221,8 @@ html, body, #root {
 .app-shell[data-device="tv"] .app-main {
   grid-template-columns: max(460px, 43%) minmax(0, 1fr);
 }
-.app-shell[data-device="tv"] .app-main[data-swapped="true"] {
+.app-shell[data-device="tv"] .app-main[data-swapped="true"],
+.app-shell[data-device="tv"] .app-main[data-globe-pos="left"] {
   grid-template-columns: minmax(0, 1fr) max(460px, 43%);
 }
 
@@ -219,9 +261,10 @@ html, body, #root {
   padding-bottom: 8px !important;
 }
 
-.app-shell[data-device="tv"] .app-device-toggle button {
+.app-shell[data-device="tv"] .app-device-toggle button,
+.app-shell[data-device="tv"] .app-globe-pos-toggle button {
   font-size: 13px !important;
-  padding: 6px 12px !important;
+  padding: 6px 10px !important;
 }
 
 .app-shell[data-device="tv"] button:focus-visible,

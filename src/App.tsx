@@ -23,7 +23,7 @@ import { addEventPinsToMap } from './mapPins.js';
 import { flyCameraToCoordinate } from './cameraFlyer.js';
 import { initMapLibreWorker } from './maplibreWorker.ts';
 import { GoogleMap3DView } from './components/GoogleMap3DView';
-import { ChevronUp, Smartphone, Monitor, Tv } from 'lucide-react';
+import { ChevronUp, Smartphone, Monitor, Tv, Globe } from 'lucide-react';
 import { useHaptic } from './hooks/useHaptic';
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
@@ -213,16 +213,14 @@ export default function App() {
 
   // Desktop Preview Utility Bar frame mode
 
-  // Cross-axis drag swap state (between 3D globe and bottom card section)
+  // Cross-axis swap state (controlled via Globe Position pill toggle: top | bottom | left | right)
   const [isSwapped, setIsSwapped] = useState(false);
-  const isSwappedRef = useRef(false);
   const [sectionHeights, setSectionHeights] = useState({ globe: 0, card: 0 });
   const middleContainerRef = useRef<HTMLDivElement>(null);
   const globeSectionRef = useRef<HTMLElement>(null);
   const cardSectionRef = useRef<HTMLElement>(null);
-  const isTouchMultiRef = useRef(false);
 
-  // Landscape-wide layout flag (same query as the landscape CSS block in index.css); only used for the hint wording
+  // Landscape-wide layout flag (same query as the landscape CSS block in index.css)
   const LANDSCAPE_QUERY = '(min-width: 768px)';
   const [isLandscapeWide, setIsLandscapeWide] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(LANDSCAPE_QUERY).matches
@@ -246,13 +244,20 @@ export default function App() {
     deviceMode === 'auto' ? (isLandscapeWide ? 'landscape' : 'phone') : deviceMode;
   const isHorizontalSplit = effectiveDeviceMode === 'landscape' || effectiveDeviceMode === 'tv';
 
-  // Pointer tracking refs for cross-axis drag swap: reset to null onPointerUp
-  const startCoordsRef = useRef<{ x: number; y: number } | null>(null);
-  const lastCoordsRef = useRef<{ x: number; y: number } | null>(null);
+  // Globe Position Toggle ('top' | 'bottom' | 'left' | 'right')
+  const [globePosition, setGlobePosition] = useState<'top' | 'bottom' | 'left' | 'right'>(() =>
+    typeof window !== 'undefined' && window.matchMedia(LANDSCAPE_QUERY).matches ? 'right' : 'top'
+  );
 
-  useEffect(() => {
-    isSwappedRef.current = isSwapped;
-  }, [isSwapped]);
+  const handleSelectGlobePosition = (pos: 'top' | 'bottom' | 'left' | 'right') => {
+    triggerPanelToggle();
+    setGlobePosition(pos);
+    if (pos === 'bottom' || pos === 'left') {
+      setIsSwapped(true);
+    } else {
+      setIsSwapped(false);
+    }
+  };
 
   // Track heights for smooth translation swap without collapsing or shrinking
   useEffect(() => {
@@ -284,7 +289,7 @@ export default function App() {
       window.removeEventListener('resize', updateHeights);
       ro?.disconnect();
     };
-  }, [isFeedCollapsed, effectiveDeviceMode]);
+  }, [isFeedCollapsed, effectiveDeviceMode, globePosition]);
 
   // Reset swap when feed is explicitly collapsed so full globe view is consistent
   useEffect(() => {
@@ -292,97 +297,6 @@ export default function App() {
       setIsSwapped(false);
     }
   }, [isFeedCollapsed, isSwapped]);
-
-  // Touch handlers for multi-touch (pinch-zoom) isolation
-  const handleGlobeTouchStart = (e: React.TouchEvent<HTMLElement>) => {
-    if (e.touches.length > 1) {
-      isTouchMultiRef.current = true;
-    }
-  };
-
-  const handleGlobeTouchEnd = (e: React.TouchEvent<HTMLElement>) => {
-    if (e.touches.length <= 1) {
-      isTouchMultiRef.current = false;
-    }
-  };
-
-  // Resets both pointer tracking refs to null every time
-  const handleGlobePointerUp = () => {
-    startCoordsRef.current = null;
-    lastCoordsRef.current = null;
-  };
-
-  // Hold and drag UP to near the top edge to toggle swap (Phone, Landscape/Tablet, and TV)
-  const handleGlobePointerDown = (e: React.PointerEvent<HTMLElement>) => {
-    if (e.button !== 0 || isTouchMultiRef.current) return;
-
-    startCoordsRef.current = { x: e.clientX, y: e.clientY };
-    lastCoordsRef.current = { x: e.clientX, y: e.clientY };
-    let triggered = false;
-
-    const handleWindowPointerMove = (moveEv: PointerEvent) => {
-      if (triggered || isTouchMultiRef.current || !startCoordsRef.current || !lastCoordsRef.current) return;
-
-      const currentX = moveEv.clientX;
-      const currentY = moveEv.clientY;
-      lastCoordsRef.current = { x: currentX, y: currentY };
-
-      // If pointer moves lower than start (dragging down) or predominantly sideways, re-anchor start
-      if (currentY > startCoordsRef.current.y + 4) {
-        startCoordsRef.current = { x: currentX, y: currentY };
-        return;
-      }
-
-      const dy = currentY - startCoordsRef.current.y;
-      const dx = currentX - startCoordsRef.current.x;
-      const absX = Math.abs(dx);
-      const absY = Math.abs(dy);
-
-      if (absX > absY + 32) {
-        startCoordsRef.current = { x: currentX, y: currentY };
-        return;
-      }
-
-      // Must be predominantly an upward drag (dy < 0)
-      if (dy >= 0 || absY < absX * 1.15) return;
-
-      const minUpwardTravel = isHorizontalSplit ? 85 : 48;
-      if (dy > -minUpwardTravel) return;
-
-      // Must reach near the top edge of the globe container (or top edge of screen)
-      const globeRect = globeSectionRef.current?.getBoundingClientRect();
-      const topEdgeZone = globeRect
-        ? globeRect.top + Math.min(72, Math.max(52, globeRect.height * 0.16))
-        : 72;
-
-      if (currentY <= topEdgeZone) {
-        triggered = true;
-        setIsSwapped((prev) => !prev);
-        triggerPanelToggle();
-        cleanup();
-      }
-    };
-
-    const cleanup = () => {
-      window.removeEventListener('pointermove', handleWindowPointerMove);
-      window.removeEventListener('pointerup', handleWindowPointerUp);
-      window.removeEventListener('pointercancel', handleWindowPointerUp);
-      // onPointerUp resets both refs to null every time
-      startCoordsRef.current = null;
-      lastCoordsRef.current = null;
-    };
-
-    const handleWindowPointerUp = () => {
-      // onPointerUp resets both refs to null every time
-      startCoordsRef.current = null;
-      lastCoordsRef.current = null;
-      cleanup();
-    };
-
-    window.addEventListener('pointermove', handleWindowPointerMove);
-    window.addEventListener('pointerup', handleWindowPointerUp);
-    window.addEventListener('pointercancel', handleWindowPointerUp);
-  };
 
   // MapLibre map & Pins state
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -432,8 +346,11 @@ export default function App() {
 
       mapInstance.on('load', () => {
         setMap(mapInstance);
-        (window as any).map = mapInstance;
-        (window as any).__freshaddy_map = mapInstance;
+        // Only register as primary map if GlobeView hasn't already registered its 3D globe
+        if (!(window as any).__freshaddy_globe_active) {
+          (window as any).map = mapInstance;
+          (window as any).__freshaddy_map = mapInstance;
+        }
         // Populate initial event pins to map
         addEventPinsToMap(mapInstance, events);
       });
@@ -812,11 +729,13 @@ export default function App() {
   return (
     <div
       data-device={effectiveDeviceMode}
+      data-globe-pos={globePosition}
       className="app-shell min-h-screen w-full bg-[#05070e] text-slate-100 flex flex-col items-center justify-center p-0 sm:p-4 select-none font-sans overflow-x-hidden"
     >
       {/* Mobile Screen Container: Exactly 390×844 */}
       <main
         data-swapped={isSwapped ? 'true' : 'false'}
+        data-globe-pos={globePosition}
         className="app-main relative flex flex-col overflow-hidden bg-slate-950 transition-all duration-300 w-full max-w-[390px] h-[844px] rounded-none sm:rounded-3xl shadow-2xl border border-slate-800"
       >
         {/* iOS Phone Status Bar (Dynamic Island & Clock) */}
@@ -831,72 +750,102 @@ export default function App() {
           <section
             ref={globeSectionRef}
             aria-label="3D Interactive Globe and Map"
-            onPointerDown={handleGlobePointerDown}
-            onPointerUp={handleGlobePointerUp}
-            onPointerCancel={handleGlobePointerUp}
-            onTouchStart={handleGlobeTouchStart}
-            onTouchEnd={handleGlobeTouchEnd}
             data-swap-state={isSwapped ? 'swapped' : 'normal'}
-            title="Hold and drag up to near the top edge to swap"
             className={`app-globe relative w-full overflow-hidden touch-none bg-[#070c18] ${
               isFeedCollapsed ? 'flex-1 h-full' : 'h-[40%] shrink-0'
             }`}
             style={{
               transform:
-                !isHorizontalSplit && isSwapped && (sectionHeights.card > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
+                effectiveDeviceMode === 'phone' && (globePosition === 'bottom' || isSwapped) && (sectionHeights.card > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
                   ? `translateY(${sectionHeights.card > 0 ? sectionHeights.card : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.6 : 472)}px)`
                   : 'translateY(0px)',
               transition: 'transform 450ms cubic-bezier(0.25, 1, 0.5, 1)',
               zIndex: isSwapped ? 25 : 10,
             }}
           >
-            {/* AI Studio-style Device Viewport Toggle (Phone | Landscape | Android TV 10') */}
+            {/* Top-Right Pill Controls: Globe Position Toggle (Top | Bottom | Left | Right) + Device Viewport Toggle (Phone | Landscape | TV 10') */}
             <div
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="app-device-toggle absolute top-2.5 right-3 z-30 flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg pointer-events-auto"
-              role="group"
-              aria-label="Viewport Mode Toggle"
+              className="absolute top-2.5 right-3 z-30 flex flex-wrap items-center justify-end gap-1.5 pointer-events-auto max-w-[92%]"
             >
-              <button
-                type="button"
-                onClick={() => setDeviceMode('phone')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
-                  effectiveDeviceMode === 'phone'
-                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
-                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                }`}
-                title="Phone Portrait View (390×844)"
+              {/* Globe Position Pill Toggle */}
+              <div
+                className="app-globe-pos-toggle flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg"
+                role="group"
+                aria-label="Globe Position Toggle"
               >
-                <Smartphone size={11} />
-                <span>Phone</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeviceMode('landscape')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
-                  effectiveDeviceMode === 'landscape'
-                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
-                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                }`}
-                title="Landscape Split View"
+                <span className="flex items-center gap-1 pl-2 pr-1 text-[9.5px] font-semibold text-cyan-300/90">
+                  <Globe size={10} />
+                </span>
+                {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
+                  <button
+                    key={pos}
+                    type="button"
+                    onClick={() => handleSelectGlobePosition(pos)}
+                    className={`px-1.5 py-1 rounded-full text-[9.5px] font-semibold capitalize transition-all cursor-pointer ${
+                      globePosition === pos
+                        ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
+                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                    }`}
+                    title={`Dock Globe ${pos.charAt(0).toUpperCase() + pos.slice(1)}`}
+                  >
+                    {pos}
+                  </button>
+                ))}
+              </div>
+
+              {/* AI Studio-style Device Viewport Toggle (Phone | Landscape | Android TV 10') */}
+              <div
+                className="app-device-toggle flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg"
+                role="group"
+                aria-label="Viewport Mode Toggle"
               >
-                <Monitor size={11} />
-                <span>Landscape</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeviceMode('tv')}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
-                  effectiveDeviceMode === 'tv'
-                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
-                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                }`}
-                title="Android TV 10-Foot UI Mode"
-              >
-                <Tv size={11} />
-                <span>TV 10&prime;</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeviceMode('phone');
+                    if (globePosition === 'left' || globePosition === 'right') {
+                      handleSelectGlobePosition('top');
+                    }
+                  }}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                    effectiveDeviceMode === 'phone'
+                      ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
+                      : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                  }`}
+                  title="Phone Portrait View (390×844)"
+                >
+                  <Smartphone size={11} />
+                  <span>Phone</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeviceMode('landscape')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                    effectiveDeviceMode === 'landscape'
+                      ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
+                      : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                  }`}
+                  title="Landscape Split View"
+                >
+                  <Monitor size={11} />
+                  <span>Landscape</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeviceMode('tv')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                    effectiveDeviceMode === 'tv'
+                      ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
+                      : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                  }`}
+                  title="Android TV 10-Foot UI Mode"
+                >
+                  <Tv size={11} />
+                  <span>TV 10&prime;</span>
+                </button>
+              </div>
             </div>
             {/* MapLibre Map instance for map pins and markers */}
             <div
@@ -956,7 +905,7 @@ export default function App() {
             }`}
             style={{
               transform:
-                !isHorizontalSplit && isSwapped && (sectionHeights.globe > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
+                effectiveDeviceMode === 'phone' && (globePosition === 'bottom' || isSwapped) && (sectionHeights.globe > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
                   ? `translateY(-${sectionHeights.globe > 0 ? sectionHeights.globe : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.4 : 313)}px)`
                   : 'translateY(0px)',
               transition: 'transform 450ms cubic-bezier(0.25, 1, 0.5, 1)',
