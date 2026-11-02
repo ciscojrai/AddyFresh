@@ -677,31 +677,74 @@ export default function App() {
 
   // Chat conversation actions
   const handleSendMessageInChat = (conversationId: string, messageText: string) => {
-    const aiAnswer = generateAiResponse(messageText, events);
+    const stamp = Date.now();
     const userMsg = {
-      id: `msg-${Date.now()}-u`,
+      id: `msg-${stamp}-u`,
       sender: 'user' as const,
       text: messageText,
       timestamp: 'Just now',
     };
-    const assistantMsg = {
-      id: `msg-${Date.now()}-a`,
+    const assistantId = `msg-${stamp}-a`;
+    const pendingMsg = {
+      id: assistantId,
       sender: 'assistant' as const,
-      text: aiAnswer,
+      text: 'Muse is thinking…',
       timestamp: 'Just now',
     };
+    const priorMessages = conversations.find((c) => c.id === conversationId)?.messages ?? [];
+    const history = priorMessages
+      .slice(-6)
+      .map((m) => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text }));
 
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conversationId
-          ? {
-              ...c,
-              updatedAt: 'Just now',
-              messages: [...c.messages, userMsg, assistantMsg],
-            }
+          ? { ...c, updatedAt: 'Just now', messages: [...c.messages, userMsg, pendingMsg] }
           : c
       )
     );
+
+    const setAssistantText = (text: string) =>
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, messages: c.messages.map((m) => (m.id === assistantId ? { ...m, text } : m)) }
+            : c
+        )
+      );
+
+    // Meta Muse (server-side proxy: /api/muse/chat). On any failure fall back to the local search answer.
+    fetch('/api/muse/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: messageText,
+        history,
+        events: events.slice(0, 12).map((e) => ({
+          title: e.title,
+          city: e.city,
+          date: e.date,
+          lat: e.lat,
+          lng: e.lng,
+        })),
+      }),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`muse ${r.status}`);
+        return r.json();
+      })
+      .then((data: { text?: string; actions?: Array<{ type: string; lat?: number; lon?: number }> }) => {
+        setAssistantText(data.text || 'Muse had no answer for that.');
+        (data.actions || []).forEach((a) => {
+          if (a.type === 'fly_to' && typeof a.lat === 'number' && typeof a.lon === 'number') {
+            flyCameraToCoordinate({ lat: a.lat, lng: a.lon, target: 'globe' });
+          }
+        });
+      })
+      .catch((err) => {
+        console.warn('Muse chat unavailable, using local search:', err);
+        setAssistantText(`${generateAiResponse(messageText, events)}\n\nMuse offline - showing local results.`);
+      });
   };
 
   const handleNewChat = (initialQuery?: string) => {

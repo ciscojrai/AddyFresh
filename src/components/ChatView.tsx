@@ -288,6 +288,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <Send size={15} />
           </button>
         </form>
+        <div className="bg-[#090e1c] text-center text-[9px] text-slate-600 pb-1 -mt-1 shrink-0 select-none">
+          Powered by Meta Muse
+        </div>
       </div>
     );
   }

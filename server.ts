@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -142,6 +143,125 @@ app.get('/api/events/live', (_req: Request, res: Response) => {
     events: picked,
     message: `Discovered ${picked.length} new live events on planetary mesh`,
   });
+});
+
+// ---------------------------------------------------------------------------
+// Meta Muse chat (server side only: the key is read from .env.muse and never sent to the client)
+// Same approach as God's Eye TV: OpenAI-compatible chat/completions with tool calling.
+// ---------------------------------------------------------------------------
+function loadMuseConfig() {
+  let key = process.env.MODEL_API_KEY || process.env.MUSE_KEY_1 || '';
+  try {
+    const raw = fs.readFileSync(path.resolve(__dirname, '.env.muse'), 'utf8');
+    for (const line of raw.split(/\r?\n/)) {
+      const m = line.match(/^\s*(?:export\s+)?(MODEL_API_KEY|MUSE_KEY_1)\s*=\s*(.*)\s*$/);
+      if (m) key = m[2].replace(/^["']|["']$/g, '').trim();
+    }
+  } catch {
+    /* no .env.muse: Muse stays disabled and the client falls back to local search */
+  }
+  if (key.startsWith('PASTE_')) key = '';
+  return {
+    key,
+    baseUrl: process.env.META_API_BASE_URL || 'https://api.meta.ai/v1',
+    model: process.env.MUSE_DEFAULT_MODEL || 'muse-spark-1.3-contributor',
+  };
+}
+
+const MUSE_SYSTEM_PROMPT = `You are Muse, the assistant inside FreshAddy, a 3D globe app for discovering live music, festivals and nightlife.
+Keep answers short (1-3 sentences), friendly and concrete. Use the event list provided as context when it fits.
+When the user wants to see or go to a place, call the fly_to tool with that place's latitude, longitude and a short label.
+Do not invent ticket prices or times that are not in the context.`;
+
+const MUSE_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'fly_to',
+      description: 'Move the FreshAddy globe to a place.',
+      parameters: {
+        type: 'object',
+        properties: {
+          lat: { type: 'number', description: 'Latitude' },
+          lon: { type: 'number', description: 'Longitude' },
+          label: { type: 'string', description: 'Short place label, e.g. Tokyo' },
+        },
+        required: ['lat', 'lon', 'label'],
+      },
+    },
+  },
+];
+
+app.post('/api/muse/chat', async (req: Request, res: Response) => {
+  const cfg = loadMuseConfig();
+  const message = typeof req.body?.message === 'string' ? req.body.message.trim().slice(0, 1000) : '';
+  if (!message) return res.status(400).json({ error: 'message required' });
+  if (!cfg.key) return res.status(503).json({ error: 'muse_not_configured' });
+
+  const history: Array<{ role: string; content: string }> = Array.isArray(req.body?.history)
+    ? req.body.history
+        .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+        .slice(-6)
+        .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 800) }))
+    : [];
+  const eventContext = Array.isArray(req.body?.events)
+    ? req.body.events
+        .slice(0, 12)
+        .map((e: any) => `${String(e.title).slice(0, 80)} (${String(e.city)}, ${String(e.date)}) lat=${e.lat} lng=${e.lng}`)
+        .join('\n')
+    : '';
+
+  const messages: any[] = [
+    { role: 'system', content: MUSE_SYSTEM_PROMPT },
+    ...(eventContext ? [{ role: 'system', content: `Events currently on the globe:\n${eventContext}` }] : []),
+    ...history,
+    { role: 'user', content: message },
+  ];
+  const actions: Array<{ type: 'fly_to'; lat: number; lon: number; label: string }> = [];
+  const scrub = (t: string) => t.split(cfg.key).join('***').slice(0, 300);
+
+  try {
+    let text = '';
+    for (let turn = 0; turn < 3; turn++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 25000);
+      const r = await fetch(`${cfg.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.key}` },
+        body: JSON.stringify({ model: cfg.model, messages, tools: MUSE_TOOLS, tool_choice: 'auto' }),
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(timer));
+      if (!r.ok) {
+        const body = scrub(await r.text().catch(() => ''));
+        return res.status(502).json({ error: 'muse_upstream_error', upstreamStatus: r.status, detail: body });
+      }
+      const data: any = await r.json();
+      const msg = data?.choices?.[0]?.message;
+      if (!msg) break;
+      messages.push(msg);
+      if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+        for (const call of msg.tool_calls) {
+          let args: any = {};
+          try {
+            args = JSON.parse(call.function?.arguments || '{}');
+          } catch {
+            /* ignore */
+          }
+          if (call.function?.name === 'fly_to' && Number.isFinite(args.lat) && Number.isFinite(args.lon)) {
+            actions.push({ type: 'fly_to', lat: args.lat, lon: args.lon, label: String(args.label || '') });
+          }
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: true }) });
+        }
+      } else {
+        text = typeof msg.content === 'string' ? msg.content : '';
+        break;
+      }
+    }
+    if (!text && actions.length > 0) text = `Taking you to ${actions[0].label || 'that spot'}.`;
+    return res.json({ text: text || 'Muse had no answer for that.', actions });
+  } catch (err: any) {
+    return res.status(502).json({ error: 'muse_request_failed', detail: scrub(String(err?.message || err)) });
+  }
 });
 
 async function startServer() {
