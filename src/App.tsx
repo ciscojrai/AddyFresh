@@ -95,19 +95,19 @@ const INITIAL_CONVERSATIONS: ChatConversation[] = [
     id: 'conv-4',
     title: 'Berlin Secret Boiler Rooms',
     pinned: false,
-    updatedAt: '2d ago',
+    updatedAt: '2h ago',
     messages: [
       {
         id: 'm4-1',
         sender: 'user',
         text: 'Any unlisted industrial techno sessions in Berlin?',
-        timestamp: 'Oct 7',
+        timestamp: 'Nov 1',
       },
       {
         id: 'm4-2',
         sender: 'assistant',
         text: 'Tresor Berlin and Kraftwerk industrial boiler rooms are tracking 3,400+ attendees going this weekend. Sub-bass rave mood is active on the globe.',
-        timestamp: 'Oct 7',
+        timestamp: 'Nov 1',
       },
     ],
   },
@@ -115,19 +115,19 @@ const INITIAL_CONVERSATIONS: ChatConversation[] = [
     id: 'conv-5',
     title: 'Rio Sunset Beach Grooves',
     pinned: false,
-    updatedAt: '3d ago',
+    updatedAt: '3h ago',
     messages: [
       {
         id: 'm5-1',
         sender: 'user',
         text: 'Best sunset acoustic vibes in Rio de Janeiro?',
-        timestamp: 'Oct 6',
+        timestamp: 'Nov 1',
       },
       {
         id: 'm5-2',
         sender: 'assistant',
         text: 'Ipanema Posto 9 sunset jam starts at 17:30 with live bossa fusions and seaside acoustic chill.',
-        timestamp: 'Oct 6',
+        timestamp: 'Nov 1',
       },
     ],
   },
@@ -135,19 +135,19 @@ const INITIAL_CONVERSATIONS: ChatConversation[] = [
     id: 'conv-6',
     title: 'Rain Radar Event Advisories',
     pinned: false,
-    updatedAt: '4d ago',
+    updatedAt: '4h ago',
     messages: [
       {
         id: 'm6-1',
         sender: 'user',
         text: 'How does rain radar affect outdoor festival alerts?',
-        timestamp: 'Oct 5',
+        timestamp: 'Nov 1',
       },
       {
         id: 'm6-2',
         sender: 'assistant',
         text: 'When rain radar is toggled on, open-air stadiums in precipitation zones trigger weather advisories in your alerts drawer.',
-        timestamp: 'Oct 5',
+        timestamp: 'Nov 1',
       },
     ],
   },
@@ -223,6 +223,159 @@ export default function App() {
 
   // Desktop Preview Utility Bar frame mode
   const [showFrameBezel, setShowFrameBezel] = useState(true);
+
+  // Cross-axis drag swap state (between 3D globe and bottom card section)
+  const [isSwapped, setIsSwapped] = useState(false);
+  const isSwappedRef = useRef(false);
+  const [sectionHeights, setSectionHeights] = useState({ globe: 0, card: 0 });
+  const middleContainerRef = useRef<HTMLDivElement>(null);
+  const globeSectionRef = useRef<HTMLElement>(null);
+  const cardSectionRef = useRef<HTMLElement>(null);
+  const isTouchMultiRef = useRef(false);
+
+  // Pointer tracking refs for cross-axis drag swap: reset to null onPointerUp
+  const startCoordsRef = useRef<{ x: number; y: number } | null>(null);
+  const lastCoordsRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    isSwappedRef.current = isSwapped;
+  }, [isSwapped]);
+
+  // Track heights for smooth translation swap without collapsing or shrinking
+  useEffect(() => {
+    const updateHeights = () => {
+      if (globeSectionRef.current && cardSectionRef.current) {
+        setSectionHeights({
+          globe: globeSectionRef.current.offsetHeight,
+          card: cardSectionRef.current.offsetHeight,
+        });
+      }
+    };
+
+    updateHeights();
+    const frameId = requestAnimationFrame(updateHeights);
+    window.addEventListener('resize', updateHeights);
+
+    let ro: ResizeObserver | null = null;
+    if (middleContainerRef.current && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        updateHeights();
+      });
+      ro.observe(middleContainerRef.current);
+    }
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('resize', updateHeights);
+      ro?.disconnect();
+    };
+  }, [isFeedCollapsed]);
+
+  // Reset swap when feed is explicitly collapsed so full globe view is consistent
+  useEffect(() => {
+    if (isFeedCollapsed && isSwapped) {
+      setIsSwapped(false);
+    }
+  }, [isFeedCollapsed, isSwapped]);
+
+  // Touch handlers for multi-touch (pinch-zoom) isolation
+  const handleGlobeTouchStart = (e: React.TouchEvent<HTMLElement>) => {
+    if (e.touches.length > 1) {
+      isTouchMultiRef.current = true;
+    }
+  };
+
+  const handleGlobeTouchEnd = (e: React.TouchEvent<HTMLElement>) => {
+    if (e.touches.length <= 1) {
+      isTouchMultiRef.current = false;
+    }
+  };
+
+  // Resets both pointer tracking refs to null every time
+  const handleGlobePointerUp = () => {
+    startCoordsRef.current = null;
+    lastCoordsRef.current = null;
+  };
+
+  // Cross-axis pointer drag handler for the globe section
+  const handleGlobePointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0 || isTouchMultiRef.current) return;
+
+    startCoordsRef.current = { x: e.clientX, y: e.clientY };
+    lastCoordsRef.current = { x: e.clientX, y: e.clientY };
+    let triggered = false;
+
+    const handleWindowPointerMove = (moveEv: PointerEvent) => {
+      if (triggered || isTouchMultiRef.current || !startCoordsRef.current || !lastCoordsRef.current) return;
+
+      const currentX = moveEv.clientX;
+      const currentY = moveEv.clientY;
+      const prevX = lastCoordsRef.current.x;
+      const prevY = lastCoordsRef.current.y;
+      lastCoordsRef.current = { x: currentX, y: currentY };
+
+      // Incremental movement for this step
+      const stepDx = currentX - prevX;
+      const stepDy = currentY - prevY;
+
+      // Direction check uses fresh start coords each move:
+      // If the incremental move is predominantly horizontal, refresh start coordinates
+      if (Math.abs(stepDx) >= Math.abs(stepDy)) {
+        startCoordsRef.current = { x: currentX, y: currentY };
+        return;
+      }
+
+      // Check displacement from the freshly established start coordinates
+      const dy = currentY - startCoordsRef.current.y;
+      const dx = currentX - startCoordsRef.current.x;
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+
+      // Horizontal check against fresh start coords: if horizontal motion dominates, refresh start coords
+      if (absX >= absY) {
+        startCoordsRef.current = { x: currentX, y: currentY };
+        return;
+      }
+
+      // Must be predominantly vertical drag
+      if (absY < absX * 1.2) return;
+
+      // Deliberate upward drag past forty-pixel threshold triggers swap
+      if (!isSwappedRef.current && dy <= -40) {
+        triggered = true;
+        setIsSwapped(true);
+        triggerPanelToggle();
+        cleanup();
+      }
+      // When swapped, deliberate downward (or upward) drag past forty-pixel threshold swaps back
+      else if (isSwappedRef.current && (dy >= 40 || dy <= -40)) {
+        triggered = true;
+        setIsSwapped(false);
+        triggerPanelToggle();
+        cleanup();
+      }
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', handleWindowPointerUp);
+      window.removeEventListener('pointercancel', handleWindowPointerUp);
+      // onPointerUp resets both refs to null every time
+      startCoordsRef.current = null;
+      lastCoordsRef.current = null;
+    };
+
+    const handleWindowPointerUp = () => {
+      // onPointerUp resets both refs to null every time
+      startCoordsRef.current = null;
+      lastCoordsRef.current = null;
+      cleanup();
+    };
+
+    window.addEventListener('pointermove', handleWindowPointerMove);
+    window.addEventListener('pointerup', handleWindowPointerUp);
+    window.addEventListener('pointercancel', handleWindowPointerUp);
+  };
 
   // MapLibre map & Pins state
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -701,162 +854,193 @@ export default function App() {
         {/* iOS Phone Status Bar (Dynamic Island & Clock) */}
         <PhoneStatusBar />
 
-        {/* 1. GLOBE & MAP — takes top ~40% of the screen OR expands to full/center screen when collapsed */}
-        <section
-          aria-label="3D Interactive Globe and Map"
-          className={`relative w-full transition-all duration-300 overflow-hidden bg-[#070c18] ${
-            isFeedCollapsed ? 'flex-1 h-full' : 'h-[40%] shrink-0'
-          }`}
+        {/* Cross-Axis Swap Layout Container: Encloses Globe and Feed for smooth vertical swap */}
+        <div
+          ref={middleContainerRef}
+          className="relative flex-1 min-h-0 w-full flex flex-col overflow-hidden"
         >
-          {/* MapLibre Map instance for map pins and markers */}
-          <div
-            ref={mapContainerRef}
-            className={`absolute inset-0 transition-opacity duration-300 ${
-              topViewMode === 'map' ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'
+          {/* 1. GLOBE & MAP — takes top ~40% of the screen OR expands to full/center screen when collapsed */}
+          <section
+            ref={globeSectionRef}
+            aria-label="3D Interactive Globe and Map"
+            onPointerDown={handleGlobePointerDown}
+            onPointerUp={handleGlobePointerUp}
+            onPointerCancel={handleGlobePointerUp}
+            onTouchStart={handleGlobeTouchStart}
+            onTouchEnd={handleGlobeTouchEnd}
+            data-swap-state={isSwapped ? 'swapped' : 'normal'}
+            title={isSwapped ? 'Drag downward past threshold to swap back' : 'Drag upward past threshold to swap with bottom card'}
+            className={`relative w-full overflow-hidden bg-[#070c18] ${
+              isFeedCollapsed ? 'flex-1 h-full' : 'h-[40%] shrink-0'
             }`}
-          />
-
-          {/* 3D Interactive Three.js Globe */}
-          <div
-            className={`absolute inset-0 transition-opacity duration-300 ${
-              topViewMode === 'globe' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-            }`}
-          >
-            <GlobeView
-              events={events}
-              selectedEvent={selectedEvent}
-              onSelectEvent={handleSelectEvent}
-              activeMood={activeMood}
-              radarActive={radarActive}
-              perspective={perspective}
-              themeMode={themeMode}
-            />
-          </div>
-
-          {/* Photorealistic Google 3D Map */}
-          {topViewMode === 'photorealistic-3d' && (
-            <div className="absolute inset-0 z-10 pointer-events-auto">
-              <GoogleMap3DView
-                selectedEvent={selectedEvent}
-                onSelectEvent={handleSelectEvent}
-                events={events}
-              />
-            </div>
-          )}
-
-          {/* Mood mover button floats at bottom-center of the globe */}
-          <div className="relative z-30">
-            <MoodMover
-              activeMood={activeMood}
-              onSelectMood={(mood) => setActiveMood(mood)}
-            />
-          </div>
-        </section>
-
-        {/* 2. SECTION AREA — COLLAPSIBLE WITH TOP HANDLE (similar to Google Maps app) */}
-        <section
-          aria-label="Section Content Panel"
-          className={`relative w-full transition-all duration-300 flex flex-col bg-slate-950 border-x-2 border-t-2 rounded-t-2xl shadow-2xl ${
-            isFeedCollapsed
-              ? 'h-8 shrink-0 overflow-hidden cursor-pointer'
-              : 'flex-1 min-h-0 overflow-hidden'
-          } ${
-            activeNav === 'home'
-              ? 'border-purple-500 shadow-[inset_0_0_18px_rgba(168,85,247,0.35),0_0_24px_rgba(168,85,247,0.3)]'
-              : activeNav === 'play'
-              ? 'border-yellow-400 shadow-[inset_0_0_20px_rgba(250,204,21,0.4),0_0_28px_rgba(250,204,21,0.35)]'
-              : activeNav === 'search'
-              ? 'border-emerald-400 shadow-[inset_0_0_18px_rgba(52,211,153,0.35),0_0_24px_rgba(52,211,153,0.3)]'
-              : activeNav === 'chat'
-              ? 'border-cyan-400 shadow-[inset_0_0_18px_rgba(34,211,238,0.35),0_0_24px_rgba(34,211,238,0.3)]'
-              : 'border-rose-500 shadow-[inset_0_0_20px_rgba(244,63,94,0.4),0_0_28px_rgba(244,63,94,0.35)]'
-          }`}
-        >
-          {/* Top Grab Handle to Collapse / Expand */}
-          <div
-            onClick={() => {
-              triggerPanelToggle();
-              setIsFeedCollapsed((prev) => !prev);
+            style={{
+              transform:
+                isSwapped && (sectionHeights.card > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
+                  ? `translateY(${sectionHeights.card > 0 ? sectionHeights.card : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.6 : 415)}px)`
+                  : 'translateY(0px)',
+              transition: 'transform 450ms cubic-bezier(0.25, 1, 0.5, 1)',
+              zIndex: isSwapped ? 25 : 10,
             }}
-            className={`w-full flex flex-col items-center justify-center ${
-              isFeedCollapsed ? 'py-1' : 'pt-2 pb-1'
-            } cursor-pointer group hover:bg-slate-900/60 select-none shrink-0`}
-            title={isFeedCollapsed ? 'Expand Feed' : 'Collapse Feed to Full Globe'}
           >
-            {isFeedCollapsed && (
-              <ChevronUp size={12} className="text-slate-400 group-hover:text-cyan-300 -mb-0.5 animate-bounce" />
-            )}
+            {/* MapLibre Map instance for map pins and markers */}
             <div
-              className={`w-12 h-1.5 rounded-full transition-all duration-200 ${
-                isFeedCollapsed
-                  ? 'bg-slate-300 shadow-[0_0_8px_rgba(255,255,255,0.7)] group-hover:bg-white'
-                  : 'bg-slate-600 group-hover:bg-slate-400'
+              ref={mapContainerRef}
+              className={`absolute inset-0 transition-opacity duration-300 ${
+                topViewMode === 'map' ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'
               }`}
             />
-          </div>
 
-          {/* Feed Content (shown when not collapsed) */}
-          {!isFeedCollapsed && (
-            <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
-              {/* Home Icon: Infinite scrolling feed of ID cards */}
-              {activeNav === 'home' && (
-                <HomeFeed
-                  events={events}
-                  selectedEvent={selectedEvent}
-                  likedEventIds={likedEventIds}
-                  onSelectEvent={handleSelectEvent}
-                  onToggleLike={handleToggleLike}
-                  onOpenStreetView={(target) => setStreetViewTarget(target)}
-                  onRefresh={handleRefreshHomeFeed}
-                />
-              )}
-
-              {/* Play Icon: YouTube Clips of saved music festivals */}
-              {activeNav === 'play' && (
-                <FestivalFeed
-                  videos={FESTIVAL_VIDEOS}
-                  onOpenStreetView={(target) => setStreetViewTarget(target)}
-                />
-              )}
-
-              {/* Search Icon: Quick discover & semantic search */}
-              {activeNav === 'search' && (
-                <SearchView
-                  events={events}
-                  onSelectEvent={handleSelectEvent}
-                  onSubmitSearch={handleSearchToChat}
-                />
-              )}
-
-              {/* Chat Icon: DeepSeek-style AI chat panel */}
-              {activeNav === 'chat' && (
-                <ChatView
-                  conversations={conversations}
-                  activeConversationId={activeConversationId}
-                  onSelectConversation={(id) => setActiveConversationId(id)}
-                  onSendMessage={handleSendMessageInChat}
-                  onNewChat={handleNewChat}
-                  onTogglePin={handleTogglePin}
-                  onDeleteConversation={handleDeleteConversation}
-                  onRenameConversation={handleRenameConversation}
-                  events={events}
-                />
-              )}
-
-              {/* Heart (Liked) Icon: List of liked ID cards */}
-              {activeNav === 'likes' && (
-                <SavedView
-                  events={events}
-                  likedEventIds={likedEventIds}
-                  selectedEvent={selectedEvent}
-                  onSelectEvent={handleSelectEvent}
-                  onToggleLike={handleToggleLike}
-                  onOpenStreetView={(target) => setStreetViewTarget(target)}
-                />
-              )}
+            {/* 3D Interactive Three.js Globe */}
+            <div
+              className={`absolute inset-0 transition-opacity duration-300 ${
+                topViewMode === 'globe' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+              }`}
+            >
+              <GlobeView
+                events={events}
+                selectedEvent={selectedEvent}
+                onSelectEvent={handleSelectEvent}
+                activeMood={activeMood}
+                radarActive={radarActive}
+                perspective={perspective}
+                themeMode={themeMode}
+              />
             </div>
-          )}
-        </section>
+
+            {/* Photorealistic Google 3D Map */}
+            {topViewMode === 'photorealistic-3d' && (
+              <div className="absolute inset-0 z-10 pointer-events-auto">
+                <GoogleMap3DView
+                  selectedEvent={selectedEvent}
+                  onSelectEvent={handleSelectEvent}
+                  events={events}
+                />
+              </div>
+            )}
+
+            {/* Mood mover button floats at bottom-center of the globe */}
+            <div className="relative z-30">
+              <MoodMover
+                activeMood={activeMood}
+                onSelectMood={(mood) => setActiveMood(mood)}
+              />
+            </div>
+          </section>
+
+          {/* 2. SECTION AREA — COLLAPSIBLE WITH TOP HANDLE (similar to Google Maps app) */}
+          <section
+            ref={cardSectionRef}
+            aria-label="Section Content Panel"
+            className={`relative w-full flex flex-col bg-slate-950 border-x-2 border-t-2 rounded-t-2xl shadow-2xl ${
+              isFeedCollapsed
+                ? 'h-8 shrink-0 overflow-hidden cursor-pointer'
+                : 'flex-1 min-h-0 overflow-hidden'
+            } ${
+              activeNav === 'home'
+                ? 'border-purple-500 shadow-[inset_0_0_18px_rgba(168,85,247,0.35),0_0_24px_rgba(168,85,247,0.3)]'
+                : activeNav === 'play'
+                ? 'border-yellow-400 shadow-[inset_0_0_20px_rgba(250,204,21,0.4),0_0_28px_rgba(250,204,21,0.35)]'
+                : activeNav === 'search'
+                ? 'border-emerald-400 shadow-[inset_0_0_18px_rgba(52,211,153,0.35),0_0_24px_rgba(52,211,153,0.3)]'
+                : activeNav === 'chat'
+                ? 'border-cyan-400 shadow-[inset_0_0_18px_rgba(34,211,238,0.35),0_0_24px_rgba(34,211,238,0.3)]'
+                : 'border-rose-500 shadow-[inset_0_0_20px_rgba(244,63,94,0.4),0_0_28px_rgba(244,63,94,0.35)]'
+            }`}
+            style={{
+              transform:
+                isSwapped && (sectionHeights.globe > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
+                  ? `translateY(-${sectionHeights.globe > 0 ? sectionHeights.globe : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.4 : 277)}px)`
+                  : 'translateY(0px)',
+              transition: 'transform 450ms cubic-bezier(0.25, 1, 0.5, 1)',
+              zIndex: isSwapped ? 10 : 25,
+            }}
+          >
+            {/* Top Grab Handle to Collapse / Expand */}
+            <div
+              onClick={() => {
+                triggerPanelToggle();
+                setIsFeedCollapsed((prev) => !prev);
+              }}
+              className={`w-full flex flex-col items-center justify-center ${
+                isFeedCollapsed ? 'py-1' : 'pt-2 pb-1'
+              } cursor-pointer group hover:bg-slate-900/60 select-none shrink-0`}
+              title={isFeedCollapsed ? 'Expand Feed' : 'Collapse Feed to Full Globe'}
+            >
+              {isFeedCollapsed && (
+                <ChevronUp size={12} className="text-slate-400 group-hover:text-cyan-300 -mb-0.5 animate-bounce" />
+              )}
+              <div
+                className={`w-12 h-1.5 rounded-full transition-all duration-200 ${
+                  isFeedCollapsed
+                    ? 'bg-slate-300 shadow-[0_0_8px_rgba(255,255,255,0.7)] group-hover:bg-white'
+                    : 'bg-slate-600 group-hover:bg-slate-400'
+                }`}
+              />
+            </div>
+
+            {/* Feed Content (shown when not collapsed) */}
+            {!isFeedCollapsed && (
+              <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
+                {/* Home Icon: Infinite scrolling feed of ID cards */}
+                {activeNav === 'home' && (
+                  <HomeFeed
+                    events={events}
+                    selectedEvent={selectedEvent}
+                    likedEventIds={likedEventIds}
+                    onSelectEvent={handleSelectEvent}
+                    onToggleLike={handleToggleLike}
+                    onOpenStreetView={(target) => setStreetViewTarget(target)}
+                    onRefresh={handleRefreshHomeFeed}
+                  />
+                )}
+
+                {/* Play Icon: YouTube Clips of saved music festivals */}
+                {activeNav === 'play' && (
+                  <FestivalFeed
+                    videos={FESTIVAL_VIDEOS}
+                    onOpenStreetView={(target) => setStreetViewTarget(target)}
+                  />
+                )}
+
+                {/* Search Icon: Quick discover & semantic search */}
+                {activeNav === 'search' && (
+                  <SearchView
+                    events={events}
+                    onSelectEvent={handleSelectEvent}
+                    onSubmitSearch={handleSearchToChat}
+                  />
+                )}
+
+                {/* Chat Icon: DeepSeek-style AI chat panel */}
+                {activeNav === 'chat' && (
+                  <ChatView
+                    conversations={conversations}
+                    activeConversationId={activeConversationId}
+                    onSelectConversation={(id) => setActiveConversationId(id)}
+                    onSendMessage={handleSendMessageInChat}
+                    onNewChat={handleNewChat}
+                    onTogglePin={handleTogglePin}
+                    onDeleteConversation={handleDeleteConversation}
+                    onRenameConversation={handleRenameConversation}
+                    events={events}
+                  />
+                )}
+
+                {/* Heart (Liked) Icon: List of liked ID cards */}
+                {activeNav === 'likes' && (
+                  <SavedView
+                    events={events}
+                    likedEventIds={likedEventIds}
+                    selectedEvent={selectedEvent}
+                    onSelectEvent={handleSelectEvent}
+                    onToggleLike={handleToggleLike}
+                    onOpenStreetView={(target) => setStreetViewTarget(target)}
+                  />
+                )}
+              </div>
+            )}
+          </section>
+        </div>
 
         {/* 3. BOTTOM CONTROLS */}
         <BottomControls
