@@ -79,80 +79,154 @@ html, body, #root {
 
 
 /* ------------------------------------------------------------------
-   LANDSCAPE LAYOUT (added 2026-11-02)
-   Wider-than-tall viewport (>= 768px wide): horizontal split with the
-   feed / Street View panel on the LEFT (40% width, min 360px) and the
-   globe / map on the RIGHT filling the rest. Portrait (< 768px) is
-   untouched: every rule below lives inside this media query.
+   LANDSCAPE & ANDROID TV 16:9 SPLIT LAYOUT (added 2026-11-02)
+   Applies automatically at >= 768px (default 'landscape' mode) or when
+   toggled via the AI Studio-style [ Phone | Landscape | TV 10' ] pill.
+   Clicking 'Phone' restores the exact 390×844 portrait frame even on MacBook.
    ------------------------------------------------------------------ */
-@media (min-width: 768px) {
-  .app-shell {
-    position: relative;
-    height: 100dvh;
-    min-height: 0;
-    padding: 0 !important;
-    align-items: stretch;
-    justify-content: flex-start;
-    overflow: hidden;
-  }
+.app-shell[data-device="landscape"],
+.app-shell[data-device="tv"] {
+  position: relative;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0 !important;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+}
 
-  .app-main {
-    flex: 1 1 0;
-    min-height: 0;
-    width: 100%;
-    max-width: none;
-    height: auto;
-    border-width: 0;
-    border-radius: 0;
-    box-shadow: none !important;
-    display: grid;
-    grid-template-columns: max(360px, 40%) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-  }
+.app-shell[data-device="landscape"] .app-main,
+.app-shell[data-device="tv"] .app-main {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  border-width: 0;
+  border-radius: 0;
+  box-shadow: none !important;
+  display: grid;
+  grid-template-columns: max(360px, 40%) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
 
-  .app-statusbar { display: none; }
+.app-shell[data-device="landscape"] .app-statusbar,
+.app-shell[data-device="tv"] .app-statusbar {
+  display: none;
+}
 
-  /* middle container dissolves so feed + globe become grid items of .app-main */
-  .app-middle { display: contents; }
+/* middle container dissolves so feed + globe become grid items of .app-main */
+.app-shell[data-device="landscape"] .app-middle,
+.app-shell[data-device="tv"] .app-middle {
+  display: contents;
+}
 
-  .app-feed {
-    grid-column: 1;
-    grid-row: 1;
-    width: auto;
-    height: auto;
-    min-height: 0;
-    border-radius: 0;
-    border-top-width: 0;
-    transform: none !important;
-    z-index: 25 !important;
-  }
+.app-shell[data-device="landscape"] .app-feed,
+.app-shell[data-device="tv"] .app-feed {
+  grid-column: 1;
+  grid-row: 1;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  border-radius: 0;
+  border-top-width: 0;
+  transform: none !important;
+  z-index: 25 !important;
+}
 
-  .app-globe {
-    grid-column: 2;
-    grid-row: 1;
-    width: auto;
-    height: auto;
-    min-width: 0;
-    min-height: 0;
-    transform: none !important;
-    z-index: 10 !important;
-  }
+.app-shell[data-device="landscape"] .app-globe,
+.app-shell[data-device="tv"] .app-globe {
+  grid-column: 2;
+  grid-row: 1;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  transform: none !important;
+  z-index: 10 !important;
+}
 
-  /* Street View and Event Detail panels slide up inside .app-feed (the panel column) */
-  .app-streetview,
-  .app-eventsheet {
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: 60%;
-    max-height: none;
-    min-height: 260px;
-  }
+/* Street View and Event Detail panels slide up inside .app-feed (the panel column) */
+.app-shell[data-device="landscape"] .app-streetview,
+.app-shell[data-device="landscape"] .app-eventsheet,
+.app-shell[data-device="tv"] .app-streetview,
+.app-shell[data-device="tv"] .app-eventsheet {
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 60%;
+  max-height: none;
+  min-height: 260px;
+}
 
-  /* Swapped (shared isSwapped state): globe on the LEFT, panel column on the RIGHT */
-  .app-main[data-swapped="true"] {
-    grid-template-columns: minmax(0, 1fr) max(360px, 40%);
-  }
-  .app-main[data-swapped="true"] .app-globe { grid-column: 1; }
-  .app-main[data-swapped="true"] .app-feed { grid-column: 2; }
+/* Swapped (shared isSwapped state): globe on the LEFT, panel column on the RIGHT */
+.app-shell[data-device="landscape"] .app-main[data-swapped="true"] {
+  grid-template-columns: minmax(0, 1fr) max(360px, 40%);
+}
+.app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-globe,
+.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-globe {
+  grid-column: 1;
+}
+.app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-feed,
+.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-feed {
+  grid-column: 2;
+}
+
+/* ------------------------------------------------------------------
+   ANDROID TV 10-FOOT UI SCALING (data-device="tv")
+   Larger 10' living-room typography, wider panel column, generous touch/D-pad
+   targets, and high-visibility focus rings.
+   ------------------------------------------------------------------ */
+.app-shell[data-device="tv"] .app-main {
+  grid-template-columns: max(460px, 43%) minmax(0, 1fr);
+}
+.app-shell[data-device="tv"] .app-main[data-swapped="true"] {
+  grid-template-columns: minmax(0, 1fr) max(460px, 43%);
+}
+
+.app-shell[data-device="tv"] [class*="text-[8px]"],
+.app-shell[data-device="tv"] [class*="text-[9px]"],
+.app-shell[data-device="tv"] [class*="text-[10px]"] {
+  font-size: 13.5px !important;
+  line-height: 1.35 !important;
+}
+
+.app-shell[data-device="tv"] [class*="text-[11px]"],
+.app-shell[data-device="tv"] .text-xs {
+  font-size: 15.5px !important;
+  line-height: 1.4 !important;
+}
+
+.app-shell[data-device="tv"] .text-sm {
+  font-size: 18px !important;
+  line-height: 1.45 !important;
+}
+
+.app-shell[data-device="tv"] .text-base {
+  font-size: 21px !important;
+  line-height: 1.4 !important;
+}
+
+.app-shell[data-device="tv"] .text-lg,
+.app-shell[data-device="tv"] .text-xl {
+  font-size: 25px !important;
+  line-height: 1.3 !important;
+}
+
+.app-shell[data-device="tv"] .app-controls input {
+  font-size: 16px !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.app-shell[data-device="tv"] .app-device-toggle button {
+  font-size: 13px !important;
+  padding: 6px 12px !important;
+}
+
+.app-shell[data-device="tv"] button:focus-visible,
+.app-shell[data-device="tv"] input:focus-visible {
+  outline: 2.5px solid #22d3ee !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.55) !important;
 }

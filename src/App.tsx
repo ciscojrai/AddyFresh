@@ -23,7 +23,7 @@ import { addEventPinsToMap } from './mapPins.js';
 import { flyCameraToCoordinate } from './cameraFlyer.js';
 import { initMapLibreWorker } from './maplibreWorker.ts';
 import { GoogleMap3DView } from './components/GoogleMap3DView';
-import { ChevronUp } from 'lucide-react';
+import { ChevronUp, Smartphone, Monitor, Tv } from 'lucide-react';
 import { useHaptic } from './hooks/useHaptic';
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
@@ -233,6 +233,18 @@ export default function App() {
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
+
+  // AI Studio-style Device Viewport Toggle ('auto' | 'phone' | 'landscape' | 'tv')
+  const [deviceMode, setDeviceMode] = useState<'auto' | 'phone' | 'landscape' | 'tv'>(() => {
+    if (typeof window !== 'undefined') {
+      const param = new URLSearchParams(window.location.search).get('mode');
+      if (param === 'phone' || param === 'landscape' || param === 'tv') return param;
+    }
+    return 'auto';
+  });
+  const effectiveDeviceMode: 'phone' | 'landscape' | 'tv' =
+    deviceMode === 'auto' ? (isLandscapeWide ? 'landscape' : 'phone') : deviceMode;
+  const isHorizontalSplit = effectiveDeviceMode === 'landscape' || effectiveDeviceMode === 'tv';
 
   // Pointer tracking refs for cross-axis drag swap: reset to null onPointerUp
   const startCoordsRef = useRef<{ x: number; y: number } | null>(null);
@@ -804,7 +816,10 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell min-h-screen w-full bg-[#05070e] text-slate-100 flex flex-col items-center justify-center p-0 sm:p-4 select-none font-sans overflow-x-hidden">
+    <div
+      data-device={effectiveDeviceMode}
+      className="app-shell min-h-screen w-full bg-[#05070e] text-slate-100 flex flex-col items-center justify-center p-0 sm:p-4 select-none font-sans overflow-x-hidden"
+    >
       {/* Mobile Screen Container: Exactly 390×844 */}
       <main
         data-swapped={isSwapped ? 'true' : 'false'}
@@ -829,7 +844,7 @@ export default function App() {
             onTouchEnd={handleGlobeTouchEnd}
             data-swap-state={isSwapped ? 'swapped' : 'normal'}
             title={
-              isLandscapeWide
+              isHorizontalSplit
                 ? 'Drag upward past threshold to swap sides'
                 : isSwapped
                 ? 'Drag downward past threshold to swap back'
@@ -840,13 +855,61 @@ export default function App() {
             }`}
             style={{
               transform:
-                !isLandscapeWide && isSwapped && (sectionHeights.card > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
+                !isHorizontalSplit && isSwapped && (sectionHeights.card > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
                   ? `translateY(${sectionHeights.card > 0 ? sectionHeights.card : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.6 : 472)}px)`
                   : 'translateY(0px)',
               transition: 'transform 450ms cubic-bezier(0.25, 1, 0.5, 1)',
               zIndex: isSwapped ? 25 : 10,
             }}
           >
+            {/* AI Studio-style Device Viewport Toggle (Phone | Landscape | Android TV 10') */}
+            <div
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              className="app-device-toggle absolute top-2.5 right-3 z-30 flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg pointer-events-auto"
+              role="group"
+              aria-label="Viewport Mode Toggle"
+            >
+              <button
+                type="button"
+                onClick={() => setDeviceMode('phone')}
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                  effectiveDeviceMode === 'phone'
+                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+                title="Phone Portrait View (390×844)"
+              >
+                <Smartphone size={11} />
+                <span>Phone</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeviceMode('landscape')}
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                  effectiveDeviceMode === 'landscape'
+                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+                title="Landscape Split View"
+              >
+                <Monitor size={11} />
+                <span>Landscape</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeviceMode('tv')}
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                  effectiveDeviceMode === 'tv'
+                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+                title="Android TV 10-Foot UI Mode"
+              >
+                <Tv size={11} />
+                <span>TV 10&prime;</span>
+              </button>
+            </div>
             {/* MapLibre Map instance for map pins and markers */}
             <div
               ref={mapContainerRef}
@@ -905,7 +968,7 @@ export default function App() {
             }`}
             style={{
               transform:
-                !isLandscapeWide && isSwapped && (sectionHeights.globe > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
+                !isHorizontalSplit && isSwapped && (sectionHeights.globe > 0 || (middleContainerRef.current?.offsetHeight ?? 0) > 0)
                   ? `translateY(-${sectionHeights.globe > 0 ? sectionHeights.globe : (middleContainerRef.current?.offsetHeight ? middleContainerRef.current.offsetHeight * 0.4 : 313)}px)`
                   : 'translateY(0px)',
               transition: 'transform 450ms cubic-bezier(0.25, 1, 0.5, 1)',

@@ -4,6 +4,13 @@ import { EventItem, Mood, CameraPerspective, ThemeMode } from '../types';
 import { Plus, Minus } from 'lucide-react';
 import { haptic } from '../utils/haptics';
 
+const DAY_TEXTURE = '/textures/earth_day_4k.jpg';
+const NIGHT_TEXTURE = '/textures/earth_night_4k.jpg';
+const TOPO_TEXTURE = '/textures/earth_topology.png';
+const WATER_TEXTURE = '/textures/earth_water.png';
+const ATMOSPHERE_BLUE = 0x5aa9ff;
+const SUN_DIRECTION = new THREE.Vector3(1.0, 0.38, 0.95).normalize();
+
 interface GlobeViewProps {
   events: EventItem[];
   selectedEvent: EventItem | null;
@@ -38,8 +45,9 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   // Rotation and interaction physics
   const isDraggingRef = useRef(false);
   const prevMousePosRef = useRef({ x: 0, y: 0 });
-  const velocityRef = useRef({ x: 0.002, y: 0 });
+  const velocityRef = useRef({ x: 0.0014, y: 0 });
   const targetRotationRef = useRef<{ x: number; y: number } | null>(null);
+  const savedRotationRef = useRef<{ x: number; y: number }>({ x: 0.36, y: -1.15 });
 
   // Convert lat/lng to 3D vector on sphere of given radius
   const latLngToVector = (lat: number, lng: number, radius: number): THREE.Vector3 => {
@@ -79,6 +87,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     const width = container.clientWidth || 390;
     const height = container.clientHeight || 340;
 
+    THREE.Cache.enabled = true;
+
     // Scene & Camera
     const scene = new THREE.Scene();
     sceneRef.current = scene;
@@ -88,18 +98,59 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     applyCameraPosition(camera, height, width);
 
     // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
     container.replaceChildren(renderer.domElement);
     rendererRef.current = renderer;
 
+    const maxAnisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+    const loader = new THREE.TextureLoader();
+    const loadTexture = (url: string, srgb: boolean) => {
+      const tex = loader.load(
+        url,
+        undefined,
+        undefined,
+        () => console.warn('[GlobeView] texture fallback for:', url)
+      );
+      if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = maxAnisotropy;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      return tex;
+    };
+
+    const dayTexture = loadTexture(DAY_TEXTURE, true);
+    const nightTexture = loadTexture(NIGHT_TEXTURE, true);
+    const topoTexture = loadTexture(TOPO_TEXTURE, false);
+    const waterTexture = loadTexture(WATER_TEXTURE, false);
+
+    // Fixed scene lighting: primary sunlight + soft twilight/moonlight rim fill + hemisphere ambient
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.35);
+    sunLight.position.copy(SUN_DIRECTION).multiplyScalar(220);
+    scene.add(sunLight);
+
+    const moonFillLight = new THREE.DirectionalLight(0x60a5fa, 0.55);
+    moonFillLight.position.copy(SUN_DIRECTION).multiplyScalar(-180);
+    scene.add(moonFillLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x0f172a, 0.55);
+    scene.add(hemiLight);
+
     // Root Globe Group
     const globeGroup = new THREE.Group();
+    globeGroup.rotation.x = savedRotationRef.current.x;
+    globeGroup.rotation.y = savedRotationRef.current.y;
     scene.add(globeGroup);
     globeGroupRef.current = globeGroup;
 
-    // Inner Dark Core Sphere
+    // Inner Fallback Dark Core Sphere (radius 68)
     const coreGeo = new THREE.SphereGeometry(68, 64, 64);
     const coreMat = new THREE.MeshBasicMaterial({
       color: 0x050a14,
@@ -107,35 +158,87 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     const coreMesh = new THREE.Mesh(coreGeo, coreMat);
     globeGroup.add(coreMesh);
 
-    // Dotted Sphere Particles (Dot Grid Matrix)
-    const dotsCount = 2800;
-    const dotCoords: number[] = [];
-    const radius = 70;
-
-    const phiWeight = Math.PI * (3 - Math.sqrt(5));
-    for (let i = 0; i < dotsCount; i++) {
-      const y = 1 - (i / (dotsCount - 1)) * 2;
-      const radAtY = Math.sqrt(1 - y * y);
-      const theta = phiWeight * i;
-      const x = Math.cos(theta) * radAtY;
-      const z = Math.sin(theta) * radAtY;
-
-      dotCoords.push(x * radius, y * radius, z * radius);
-    }
-
-    const dotGeo = new THREE.BufferGeometry();
-    dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotCoords, 3));
-
-    const dotMat = new THREE.PointsMaterial({
-      color: new THREE.Color(activeMood.color || '#22d3ee'),
-      size: 1.6,
-      transparent: true,
-      opacity: 0.65,
+    // Real 3D Earth Sphere (radius 70, 96x96 segments for ultra-crisp silhouette)
+    const earthGeo = new THREE.SphereGeometry(70, 96, 96);
+    const earthMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: dayTexture,
+      bumpMap: topoTexture,
+      bumpScale: 1.25,
+      roughness: 0.78,
+      metalness: 0.06,
     });
-    const dotPoints = new THREE.Points(dotGeo, dotMat);
-    globeGroup.add(dotPoints);
 
-    // Atmospheric Glow Halo
+    earthMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uNightMap = { value: nightTexture };
+      shader.uniforms.uWaterMap = { value: waterTexture };
+      shader.uniforms.uSunDirection = { value: SUN_DIRECTION };
+
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWorldNormal;')
+        .replace(
+          '#include <worldpos_vertex>',
+          '#include <worldpos_vertex>\nvWorldNormal = normalize(mat3(modelMatrix) * normal);'
+        );
+
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+          uniform sampler2D uNightMap;
+          uniform sampler2D uWaterMap;
+          uniform vec3 uSunDirection;
+          varying vec3 vWorldNormal;`
+        )
+        .replace(
+          '#include <roughnessmap_fragment>',
+          `#include <roughnessmap_fragment>
+          float waterMask = texture2D(uWaterMap, vMapUv).r;
+          roughnessFactor = mix(0.84, 0.30, waterMask);`
+        )
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+          float sunDot = dot(normalize(vWorldNormal), normalize(uSunDirection));
+          float nightFactor = smoothstep(0.22, -0.22, sunDot);
+          vec3 nightLights = texture2D(uNightMap, vMapUv).rgb * vec3(1.0, 0.86, 0.58) * 1.65;
+          totalEmissiveRadiance += nightLights * nightFactor;`
+        );
+    };
+
+    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+    globeGroup.add(earthMesh);
+
+    // Inner Fresnel Atmospheric Limb Rim (radius 70.7, FrontSide)
+    const rimGeo = new THREE.SphereGeometry(70.7, 64, 64);
+    const rimMat = new THREE.ShaderMaterial({
+      vertexShader: `
+        varying vec3 vNormal;
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vNormal;
+        uniform vec3 glowColor;
+        void main() {
+          float fresnel = pow(1.0 - abs(dot(normalize(vNormal), vec3(0.0, 0.0, 1.0))), 3.1);
+          gl_FragColor = vec4(glowColor, 1.0) * fresnel * 0.55;
+        }
+      `,
+      uniforms: {
+        glowColor: { value: new THREE.Color(ATMOSPHERE_BLUE) },
+      },
+      blending: THREE.AdditiveBlending,
+      side: THREE.FrontSide,
+      transparent: true,
+      depthWrite: false,
+    });
+    const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+    scene.add(rimMesh);
+
+    // Outer Atmospheric Glow Halo (radius 76, BackSide)
     const atmosGeo = new THREE.SphereGeometry(76, 48, 48);
     const atmosMat = new THREE.ShaderMaterial({
       vertexShader: `
@@ -150,19 +253,40 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         uniform vec3 glowColor;
         void main() {
           float intensity = pow(0.65 - dot(vNormal, vec3(0, 0, 1.0)), 2.0);
-          gl_FragColor = vec4(glowColor, 1.0) * intensity * 0.45;
+          gl_FragColor = vec4(glowColor, 1.0) * intensity * 0.42;
         }
       `,
       uniforms: {
-        glowColor: { value: new THREE.Color(activeMood.color) },
+        glowColor: { value: new THREE.Color(ATMOSPHERE_BLUE) },
       },
       blending: THREE.AdditiveBlending,
       side: THREE.BackSide,
       transparent: true,
+      depthWrite: false,
     });
     const atmosphere = new THREE.Mesh(atmosGeo, atmosMat);
     scene.add(atmosphere);
     atmosphereRef.current = atmosphere;
+
+    // Deep-Space Starfield (in scene space so stars stay fixed while rotating the Earth)
+    const starCount = 1400;
+    const starCoords: number[] = [];
+    for (let i = 0; i < starCount; i++) {
+      const v = new THREE.Vector3().randomDirection().multiplyScalar(600 + Math.random() * 300);
+      starCoords.push(v.x, v.y, v.z);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starCoords, 3));
+    const starMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 1.5,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    });
+    const stars = new THREE.Points(starGeo, starMat);
+    scene.add(stars);
 
     // Pins Group
     const pinsGroup = new THREE.Group();
@@ -185,6 +309,10 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
 
       globeGroupRef.current.rotation.y += dx * 0.006;
       globeGroupRef.current.rotation.x += dy * 0.006;
+      savedRotationRef.current = {
+        x: globeGroupRef.current.rotation.x,
+        y: globeGroupRef.current.rotation.y,
+      };
       velocityRef.current = { x: dx * 0.004, y: dy * 0.004 };
     };
 
@@ -255,6 +383,10 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               velocityRef.current.x = 0.0012;
             }
           }
+          savedRotationRef.current = {
+            x: globeGroupRef.current.rotation.x,
+            y: globeGroupRef.current.rotation.y,
+          };
         }
 
         // Pulse pin heads
@@ -291,6 +423,13 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       container.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+      scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
+        if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+        else if (mat) mat.dispose();
+      });
       renderer.dispose();
     };
   }, [applyCameraPosition]);
@@ -362,24 +501,6 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     };
   }, [userZoomFactor]);
 
-  // Update Atmosphere and Particle color when activeMood changes
-  useEffect(() => {
-    if (atmosphereRef.current) {
-      const mat = atmosphereRef.current.material as THREE.ShaderMaterial;
-      if (mat.uniforms?.glowColor) {
-        mat.uniforms.glowColor.value.set(activeMood.color);
-      }
-    }
-
-    if (globeGroupRef.current) {
-      globeGroupRef.current.children.forEach((child) => {
-        if (child instanceof THREE.Points) {
-          (child.material as THREE.PointsMaterial).color.set(activeMood.color);
-        }
-      });
-    }
-  }, [activeMood]);
-
   // Re-populate Pins on Globe
   useEffect(() => {
     if (!pinsGroupRef.current) return;
@@ -392,7 +513,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     const stalkMat = new THREE.LineBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.65,
     });
 
     events.forEach((ev) => {
