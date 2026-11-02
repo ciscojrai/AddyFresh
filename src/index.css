@@ -77,3 +77,93 @@ html, body, #root {
   box-shadow: 0 0 18px #22d3ee, 0 0 28px rgba(34, 211, 238, 0.6) !important;
 }
 
+
+/* ------------------------------------------------------------------
+   LANDSCAPE LAYOUT (added 2026-11-02)
+   Wider-than-tall viewport (>= 768px wide): horizontal split with the
+   feed / Street View panel on the LEFT (40% width, min 360px) and the
+   globe / map on the RIGHT filling the rest. Portrait is untouched:
+   every rule below lives inside this media query.
+   ------------------------------------------------------------------ */
+@media (orientation: landscape) and (min-width: 768px) {
+  .app-shell {
+    position: relative;
+    height: 100dvh;
+    min-height: 0;
+    padding: 0 !important;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow: hidden;
+  }
+
+  .app-main {
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    border-width: 0;
+    border-radius: 0;
+    box-shadow: none !important;
+    display: grid;
+    grid-template-columns: max(360px, 40%) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+  }
+
+  .app-statusbar { display: none; }
+
+  /* middle container dissolves so feed + globe become grid items of .app-main */
+  .app-middle { display: contents; }
+
+  .app-feed {
+    grid-column: 1;
+    grid-row: 1;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    border-radius: 0;
+    border-top-width: 0;
+    transform: none !important;
+    z-index: 25 !important;
+  }
+  .app-feed.h-8 { height: 2rem; align-self: start; }
+
+  .app-globe {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    transform: none !important;
+    z-index: 10 !important;
+  }
+
+  .app-controls { grid-column: 1; grid-row: 2; z-index: 30; }
+  .app-homeind { grid-column: 1; grid-row: 3; }
+
+  /* Street View panel slides up over the LEFT panel only */
+  .app-streetview,
+  .app-eventsheet {
+    right: auto;
+    width: max(360px, 40%);
+    height: 60%;
+    max-height: none;
+    min-height: 260px;
+  }
+
+  /* Swapped (shared isSwapped state): globe on the LEFT, panel column on the RIGHT */
+  .app-main[data-swapped="true"] {
+    grid-template-columns: minmax(0, 1fr) max(360px, 40%);
+  }
+  .app-main[data-swapped="true"] .app-globe { grid-column: 1; }
+  .app-main[data-swapped="true"] .app-feed,
+  .app-main[data-swapped="true"] .app-controls,
+  .app-main[data-swapped="true"] .app-homeind { grid-column: 2; }
+  /* sheets / Street View follow the panel to the right side */
+  .app-main[data-swapped="true"] > .app-streetview,
+  .app-main[data-swapped="true"] > .app-eventsheet {
+    left: auto;
+    right: 0;
+  }
+}

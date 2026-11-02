@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { EventItem } from '../types';
 import {
   Pin,
@@ -11,6 +11,7 @@ import {
   Send,
   ArrowLeft,
   Plus,
+  Mic,
 } from 'lucide-react';
 import { safeShare } from '../utils/share';
 
@@ -58,6 +59,87 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const activeConv = conversations.find((c) => c.id === activeConversationId);
 
+  // --- Pin (persisted in localStorage as a list of pinned conversation ids) ---
+  const PIN_KEY = 'freshaddy.pinnedConversations';
+  const readPinned = (): string[] => {
+    try {
+      const v = JSON.parse(localStorage.getItem(PIN_KEY) || '[]');
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  };
+  const restoredPinsRef = useRef(false);
+  useEffect(() => {
+    if (restoredPinsRef.current) return;
+    restoredPinsRef.current = true;
+    const saved = readPinned();
+    conversations.forEach((c) => {
+      if (saved.includes(c.id) && !c.pinned) onTogglePin(c.id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const handleTogglePinned = (conv: ChatConversation) => {
+    const saved = readPinned().filter((id) => id !== conv.id);
+    if (!conv.pinned) saved.push(conv.id);
+    try {
+      localStorage.setItem(PIN_KEY, JSON.stringify(saved));
+    } catch {
+      /* storage unavailable: pin still works for this session */
+    }
+    onTogglePin(conv.id);
+  };
+
+  // --- Press-and-speak speech-to-text (Web Speech API; mic hidden if unavailable) ---
+  const SpeechRec: any =
+    typeof window !== 'undefined'
+      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      : undefined;
+  const recRef = useRef<any>(null);
+  const [listening, setListening] = useState(false);
+  const startListening = () => {
+    if (!SpeechRec || recRef.current) return;
+    try {
+      const rec = new SpeechRec();
+      rec.lang = navigator.language || 'en-US';
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.onstart = () => setListening(true);
+      rec.onresult = (ev: any) => {
+        let text = '';
+        for (let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
+        setInputVal(text);
+      };
+      rec.onerror = () => {
+        setListening(false);
+        recRef.current = null;
+      };
+      rec.onend = () => {
+        setListening(false);
+        recRef.current = null;
+      };
+      recRef.current = rec;
+      rec.start();
+    } catch {
+      setListening(false);
+      recRef.current = null;
+    }
+  };
+  const stopListening = () => {
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+  };
+  useEffect(() => () => {
+    try {
+      recRef.current?.abort?.();
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const pinnedConvs = conversations.filter((c) => c.pinned);
   const recentConvs = conversations.filter((c) => !c.pinned);
 
@@ -86,31 +168,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
   if (activeConv) {
     return (
       <div className="flex-1 w-full h-full flex flex-col bg-slate-950">
-        {/* Chat Header */}
-        <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#090e1c] border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onSelectConversation(null)}
-              className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
-              title="Back to conversation list"
-            >
-              <ArrowLeft size={17} />
-            </button>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-100 truncate max-w-[220px]">
-                {activeConv.title}
-              </h3>
-              <span className="text-[10px] text-cyan-400 font-mono">
-                {activeConv.messages.length} messages
-              </span>
-            </div>
-          </div>
+        {/* Back arrow only (no header) */}
+        <div className="px-2 pt-1.5 shrink-0">
           <button
-            onClick={() => onNewChat()}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs hover:bg-cyan-900/60 transition-colors cursor-pointer"
+            onClick={() => onSelectConversation(null)}
+            className="p-1 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer"
+            title="Back to conversation list"
+            aria-label="Back to conversation list"
           >
-            <Plus size={13} />
-            <span>New</span>
+            <ArrowLeft size={15} />
           </button>
         </div>
 
@@ -124,7 +190,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-md ${
+                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-[11px] leading-relaxed shadow-md ${
                     isUser
                       ? 'bg-cyan-600 text-white rounded-br-xs'
                       : 'bg-[#0f172a] text-slate-200 border border-slate-800 rounded-bl-xs whitespace-pre-line'
@@ -140,22 +206,84 @@ export const ChatView: React.FC<ChatViewProps> = ({
           })}
         </div>
 
-        {/* Message Input Bar */}
+        {/* Message Input Bar: [+ New] [ pill input: pin, mic ] [send] */}
         <form
           onSubmit={handleSend}
           className="p-2.5 bg-[#090e1c] border-t border-slate-800/80 flex items-center gap-2 shrink-0"
         >
-          <input
-            type="text"
-            value={inputVal}
-            onChange={(e) => setInputVal(e.target.value)}
-            placeholder="Ask FreshAddy about cities, genres, venues..."
-            className="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-400"
-          />
+          <button
+            type="button"
+            onClick={() => onNewChat()}
+            className="flex items-center gap-1 h-10 px-3 rounded-full border border-slate-600 text-slate-300 text-[11px] font-medium hover:border-cyan-400 hover:text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer shrink-0"
+            title="Start a new chat"
+          >
+            <Plus size={12} />
+            <span>New</span>
+          </button>
+
+          <div className="relative flex-1 min-w-0">
+            <input
+              type="text"
+              value={inputVal}
+              onChange={(e) => setInputVal(e.target.value)}
+              placeholder="Ask FreshAddy..."
+              className="w-full h-10 bg-slate-900 border border-slate-700/80 rounded-full pl-4 pr-[5.25rem] text-[11px] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+            />
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => handleTogglePinned(activeConv)}
+                aria-pressed={activeConv.pinned}
+                title={activeConv.pinned ? 'Unpin this chat' : 'Pin this chat'}
+                className={`w-9 h-9 rounded-full flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer ${
+                  activeConv.pinned ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Pin size={15} className={activeConv.pinned ? 'fill-cyan-400' : ''} />
+              </button>
+              {SpeechRec && (
+                <button
+                  type="button"
+                  data-listening={listening ? 'true' : 'false'}
+                  title="Hold to speak"
+                  aria-label="Hold to speak"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    startListening();
+                  }}
+                  onPointerUp={stopListening}
+                  onPointerLeave={stopListening}
+                  onPointerCancel={stopListening}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) {
+                      e.preventDefault();
+                      startListening();
+                    }
+                  }}
+                  onKeyUp={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') stopListening();
+                  }}
+                  onBlur={stopListening}
+                  className={`relative w-9 h-9 rounded-full flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer touch-none ${
+                    listening
+                      ? 'text-white bg-blue-500/30 ring-2 ring-blue-400'
+                      : 'text-slate-400 hover:text-blue-300'
+                  }`}
+                >
+                  <Mic size={15} />
+                  {listening && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
           <button
             type="submit"
             disabled={!inputVal.trim()}
-            className="p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:hover:bg-cyan-500 text-slate-950 transition-colors cursor-pointer"
+            className="p-2.5 rounded-full bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:hover:bg-cyan-500 text-slate-950 transition-colors cursor-pointer shrink-0"
+            title="Send"
           >
             <Send size={15} />
           </button>
@@ -164,250 +292,155 @@ export const ChatView: React.FC<ChatViewProps> = ({
     );
   }
 
-  // 2. Default List of PINNED and RECENTS conversations (Screenshot 2)
+  // 2. Default list of PINNED and RECENTS conversations: slim Grok-style rows
+  const renderRow = (conv: ChatConversation, isPinnedSection: boolean) => {
+    const lastMsg = conv.messages[conv.messages.length - 1]?.text || 'No messages yet';
+    return (
+      <div
+        key={conv.id}
+        role="button"
+        tabIndex={0}
+        data-chat-row
+        onClick={() => onSelectConversation(conv.id)}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelectConversation(conv.id);
+          }
+        }}
+        className="group relative flex items-center gap-3 rounded-xl px-2 py-2 cursor-pointer transition-colors hover:bg-slate-800/50 focus:outline-none focus-visible:bg-slate-800/60 focus-visible:ring-2 focus-visible:ring-cyan-400/70"
+      >
+        {/* Small round icon */}
+        <div
+          data-chat-icon
+          className={`w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 ${
+            isPinnedSection ? 'text-cyan-400' : 'text-cyan-400/60'
+          }`}
+        >
+          {isPinnedSection ? <Pin size={14} className="stroke-[2.5]" /> : <MessageSquare size={14} />}
+        </div>
+
+        {/* Name + one-line preview */}
+        <div className="flex-1 min-w-0 pr-5">
+          {editingId === conv.id ? (
+            <input
+              type="text"
+              autoFocus
+              value={editTitleVal}
+              onChange={(e) => setEditTitleVal(e.target.value)}
+              onBlur={() => handleSaveRename(conv.id)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') handleSaveRename(conv.id);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-900 border border-cyan-500 rounded px-1.5 py-0.5 text-[13px] text-white w-full"
+            />
+          ) : (
+            <h4 className="text-[13px] font-bold text-white truncate leading-tight">{conv.title}</h4>
+          )}
+          <p className="text-[11px] text-slate-400 truncate mt-0.5 leading-snug">{lastMsg}</p>
+        </div>
+
+        {/* Small, faint 3-dot menu: shown on hover / focus (always faintly visible on touch) */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenMenuId(openMenuId === conv.id ? null : conv.id);
+          }}
+          className="absolute top-1/2 -translate-y-1/2 right-1 p-1.5 rounded-md text-slate-400 hover:text-slate-100 hover:bg-slate-800 opacity-0 group-hover:opacity-70 group-focus-within:opacity-70 focus:opacity-100 pointer-coarse:opacity-60 transition-opacity cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
+          title="More actions"
+          aria-label="More actions"
+        >
+          <MoreVertical size={13} />
+        </button>
+
+        {openMenuId === conv.id && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-2 top-full -mt-1 w-32 bg-[#0d1527] border border-slate-700 rounded-xl shadow-2xl py-1.5 z-40 text-xs animate-in fade-in duration-150"
+          >
+            <button
+              onClick={() => {
+                onTogglePin(conv.id);
+                setOpenMenuId(null);
+              }}
+              className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
+            >
+              {isPinnedSection ? (
+                <PinOff size={13} className="text-slate-400" />
+              ) : (
+                <Pin size={13} className="text-slate-400" />
+              )}
+              <span>{isPinnedSection ? 'Unpin' : 'Pin'}</span>
+            </button>
+            <button
+              onClick={() => {
+                safeShare({ title: conv.title, text: lastMsg, url: window.location.href });
+                setOpenMenuId(null);
+              }}
+              className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
+            >
+              <Share2 size={13} className="text-slate-400" />
+              <span>Share</span>
+            </button>
+            <button
+              onClick={(e) => handleStartRename(e, conv)}
+              className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
+            >
+              <Edit2 size={13} className="text-slate-400" />
+              <span>Rename</span>
+            </button>
+            <button
+              onClick={() => {
+                onDeleteConversation(conv.id);
+                setOpenMenuId(null);
+              }}
+              className="w-full px-3 py-1.5 flex items-center gap-2 text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 text-left border-t border-slate-800/80 mt-1 cursor-pointer"
+            >
+              <Trash2 size={13} />
+              <span>Delete</span>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div
       onClick={() => setOpenMenuId(null)}
-      className="flex-1 w-full h-full overflow-y-auto px-4 py-3.5 space-y-4 scrollbar-none relative"
+      className="flex-1 w-full h-full overflow-y-auto px-2.5 py-3 space-y-3 scrollbar-none relative"
     >
-      {/* Pinned Section Header */}
+      {/* Pinned section */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-xs tracking-wider">
-            <Pin size={13} className="stroke-[2.5]" />
-            <span>PINNED</span>
+        <div className="flex items-center justify-between mb-1 px-2">
+          <div className="flex items-center gap-1.5 text-slate-400 font-medium text-[11px] tracking-wide">
+            <Pin size={11} className="text-cyan-400" />
+            <span>Pinned</span>
             <span className="text-slate-500 font-normal">({pinnedConvs.length})</span>
           </div>
 
           <button
             onClick={() => onNewChat()}
-            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-medium cursor-pointer"
+            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-medium cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
           >
             <Plus size={12} />
             <span>New Chat</span>
           </button>
         </div>
-
-        {/* Pinned Cards */}
-        <div className="space-y-2">
-          {pinnedConvs.map((conv) => {
-            const lastMsg =
-              conv.messages[conv.messages.length - 1]?.text || 'No messages yet';
-
-            return (
-              <div
-                key={conv.id}
-                onClick={() => onSelectConversation(conv.id)}
-                className="group relative rounded-xl bg-[#090e1c] border border-cyan-950/80 hover:border-cyan-500/50 p-3 transition-all duration-150 cursor-pointer shadow-sm hover:shadow-cyan-950/40"
-              >
-                <div className="flex items-start gap-3">
-                  {/* Pin Icon pill */}
-                  <div className="w-8 h-8 rounded-lg bg-cyan-950/70 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
-                    <Pin size={14} className="stroke-[2.5]" />
-                  </div>
-
-                  {/* Text details */}
-                  <div className="flex-1 min-w-0 pr-6">
-                    {editingId === conv.id ? (
-                      <input
-                        type="text"
-                        autoFocus
-                        value={editTitleVal}
-                        onChange={(e) => setEditTitleVal(e.target.value)}
-                        onBlur={() => handleSaveRename(conv.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveRename(conv.id);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="bg-slate-900 border border-cyan-500 rounded px-1.5 py-0.5 text-xs text-white w-full"
-                      />
-                    ) : (
-                      <h4 className="text-xs font-semibold text-slate-100 truncate group-hover:text-cyan-300 transition-colors">
-                        {conv.title}
-                      </h4>
-                    )}
-                    <p className="text-[11px] text-slate-400 truncate mt-0.5 leading-snug">
-                      {lastMsg}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 3 Dots Menu Trigger */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenuId(openMenuId === conv.id ? null : conv.id);
-                  }}
-                  className="absolute top-2.5 right-2 p-1 text-slate-400 hover:text-slate-100 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
-                  title="More actions"
-                >
-                  <MoreVertical size={14} />
-                </button>
-
-                {/* Dropdown Menu Modal / Sheet (Screenshot 2) */}
-                {openMenuId === conv.id && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-2 top-8 w-32 bg-[#0d1527] border border-slate-700 rounded-xl shadow-2xl py-1.5 z-40 text-xs animate-in fade-in duration-150"
-                  >
-                    <button
-                      onClick={() => {
-                        onTogglePin(conv.id);
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
-                    >
-                      <PinOff size={13} className="text-slate-400" />
-                      <span>Unpin</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        safeShare({ title: conv.title, text: lastMsg, url: window.location.href });
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
-                    >
-                      <Share2 size={13} className="text-slate-400" />
-                      <span>Share</span>
-                    </button>
-                    <button
-                      onClick={(e) => handleStartRename(e, conv)}
-                      className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
-                    >
-                      <Edit2 size={13} className="text-slate-400" />
-                      <span>Rename</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        onDeleteConversation(conv.id);
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-3 py-1.5 flex items-center gap-2 text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 text-left border-t border-slate-800/80 mt-1 cursor-pointer"
-                    >
-                      <Trash2 size={13} />
-                      <span>Delete</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <div className="space-y-0.5">{pinnedConvs.map((conv) => renderRow(conv, true))}</div>
       </div>
 
-      {/* Recents Section Header */}
+      {/* Recents section */}
       <div>
-        <div className="flex items-center gap-1.5 text-slate-400 font-bold text-xs tracking-wider mb-2">
-          <MessageSquare size={13} />
-          <span>RECENTS</span>
+        <div className="flex items-center gap-1.5 text-slate-400 font-medium text-[11px] tracking-wide mb-1 px-2">
+          <MessageSquare size={11} />
+          <span>Recents</span>
           <span className="text-slate-500 font-normal">({recentConvs.length})</span>
         </div>
-
-        {/* Recents Cards */}
-        <div className="space-y-2">
-          {recentConvs.map((conv) => {
-            const lastMsg =
-              conv.messages[conv.messages.length - 1]?.text || 'No messages yet';
-
-            return (
-              <div
-                key={conv.id}
-                onClick={() => onSelectConversation(conv.id)}
-                className="group relative rounded-xl bg-[#090e1c] border border-slate-800/80 hover:border-slate-700 p-3 transition-all duration-150 cursor-pointer shadow-sm"
-              >
-                <div className="flex items-start gap-3">
-                  {/* Chat Icon pill */}
-                  <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 shrink-0">
-                    <MessageSquare size={14} />
-                  </div>
-
-                  {/* Text details */}
-                  <div className="flex-1 min-w-0 pr-6">
-                    {editingId === conv.id ? (
-                      <input
-                        type="text"
-                        autoFocus
-                        value={editTitleVal}
-                        onChange={(e) => setEditTitleVal(e.target.value)}
-                        onBlur={() => handleSaveRename(conv.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveRename(conv.id);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="bg-slate-900 border border-cyan-500 rounded px-1.5 py-0.5 text-xs text-white w-full"
-                      />
-                    ) : (
-                      <h4 className="text-xs font-semibold text-slate-200 truncate group-hover:text-cyan-300 transition-colors">
-                        {conv.title}
-                      </h4>
-                    )}
-                    <p className="text-[11px] text-slate-400 truncate mt-0.5 leading-snug">
-                      {lastMsg}
-                    </p>
-                  </div>
-                </div>
-
-                {/* 3 Dots Menu Trigger */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenuId(openMenuId === conv.id ? null : conv.id);
-                  }}
-                  className="absolute top-2.5 right-2 p-1 text-slate-400 hover:text-slate-100 rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
-                  title="More actions"
-                >
-                  <MoreVertical size={14} />
-                </button>
-
-                {/* Dropdown Menu Modal / Sheet */}
-                {openMenuId === conv.id && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-2 top-8 w-32 bg-[#0d1527] border border-slate-700 rounded-xl shadow-2xl py-1.5 z-40 text-xs animate-in fade-in duration-150"
-                  >
-                    <button
-                      onClick={() => {
-                        onTogglePin(conv.id);
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
-                    >
-                      <Pin size={13} className="text-slate-400" />
-                      <span>Pin</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        safeShare({ title: conv.title, text: lastMsg, url: window.location.href });
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
-                    >
-                      <Share2 size={13} className="text-slate-400" />
-                      <span>Share</span>
-                    </button>
-                    <button
-                      onClick={(e) => handleStartRename(e, conv)}
-                      className="w-full px-3 py-1.5 flex items-center gap-2 text-slate-300 hover:bg-slate-800 hover:text-white text-left cursor-pointer"
-                    >
-                      <Edit2 size={13} className="text-slate-400" />
-                      <span>Rename</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        onDeleteConversation(conv.id);
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-3 py-1.5 flex items-center gap-2 text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 text-left border-t border-slate-800/80 mt-1 cursor-pointer"
-                    >
-                      <Trash2 size={13} />
-                      <span>Delete</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <div className="space-y-0.5">{recentConvs.map((conv) => renderRow(conv, false))}</div>
       </div>
     </div>
   );

@@ -10,7 +10,6 @@ import { BottomControls } from './components/BottomControls';
 import { EventModal } from './components/EventModal';
 import { StreetViewPanel } from './components/StreetViewPanel';
 import { PhoneStatusBar } from './components/PhoneStatusBar';
-import { McpInfoModal } from './components/McpInfoModal';
 import { EVENTS_DATA, MOODS } from './data/events';
 import { FESTIVAL_VIDEOS } from './data/festivalVideos';
 import {
@@ -19,13 +18,13 @@ import {
   ActiveNav,
   StreetViewTarget,
 } from './types';
-import { getMcpServerStatus, McpServerInfo, searchMcpEventsDetailed } from './services/mcpClient';
+import { searchMcpEventsDetailed } from './services/mcpClient';
 import * as maplibregl from 'maplibre-gl';
 import { addEventPinsToMap } from './mapPins.js';
 import { flyCameraToCoordinate } from './cameraFlyer.js';
 import { initMapLibreWorker } from './maplibreWorker.ts';
 import { GoogleMap3DView } from './components/GoogleMap3DView';
-import { Smartphone, Maximize2, Radio, ChevronUp } from 'lucide-react';
+import { ChevronUp } from 'lucide-react';
 import { useHaptic } from './hooks/useHaptic';
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
@@ -209,15 +208,11 @@ export default function App() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
   // Netlify MCP connection state
-  const [mcpServerInfo, setMcpServerInfo] = useState<McpServerInfo | null>(null);
-  const [isMcpConnecting, setIsMcpConnecting] = useState(false);
-  const [mcpModalOpen, setMcpModalOpen] = useState(false);
 
   // Controls state
 
 
   // Desktop Preview Utility Bar frame mode
-  const [showFrameBezel, setShowFrameBezel] = useState(true);
 
   // Cross-axis drag swap state (between 3D globe and bottom card section)
   const [isSwapped, setIsSwapped] = useState(false);
@@ -227,6 +222,18 @@ export default function App() {
   const globeSectionRef = useRef<HTMLElement>(null);
   const cardSectionRef = useRef<HTMLElement>(null);
   const isTouchMultiRef = useRef(false);
+
+  // Landscape-wide layout flag (same query as the landscape CSS block in index.css); only used for the hint wording
+  const LANDSCAPE_QUERY = '(orientation: landscape) and (min-width: 768px)';
+  const [isLandscapeWide, setIsLandscapeWide] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(LANDSCAPE_QUERY).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(LANDSCAPE_QUERY);
+    const onChange = () => setIsLandscapeWide(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   // Pointer tracking refs for cross-axis drag swap: reset to null onPointerUp
   const startCoordsRef = useRef<{ x: number; y: number } | null>(null);
@@ -497,23 +504,6 @@ export default function App() {
   }, [map, selectedEvent]);
 
 
-  // Connect to Netlify MCP on startup
-  const connectToMcp = useCallback(async () => {
-    setIsMcpConnecting(true);
-    try {
-      const info = await getMcpServerStatus();
-      setMcpServerInfo(info);
-    } catch (err) {
-      console.warn('Could not establish initial MCP connection to Netlify:', err);
-    } finally {
-      setIsMcpConnecting(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    connectToMcp();
-  }, [connectToMcp]);
-
   // Synchronize deep links on page load
   useEffect(() => {
     try {
@@ -772,59 +762,19 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#05070e] text-slate-100 flex flex-col items-center justify-center p-0 sm:p-4 select-none font-sans overflow-x-hidden">
-      {/* Desktop Preview Utility Bar */}
-      <aside
-        aria-label="Screen Viewport Controls"
-        className="hidden sm:flex items-center justify-between w-full max-w-[420px] mb-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 backdrop-blur-md"
-      >
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="font-semibold text-slate-200">FreshAddy 3D Globe</span>
-          <span className="text-slate-500">· 390×844</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {/* Netlify MCP Badge button */}
-          <button
-            onClick={() => setMcpModalOpen(true)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-900/60 transition-colors cursor-pointer text-[10px] font-mono"
-            title="Inspect MCP endpoint (/api/mcp)"
-          >
-            <Radio size={10} className="text-cyan-400 animate-pulse" />
-            <span>MCP 149k</span>
-          </button>
-
-          <button
-            onClick={() => setShowFrameBezel(!showFrameBezel)}
-            className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
-            title="Toggle Smartphone Bezel"
-          >
-            {showFrameBezel ? <Smartphone size={12} /> : <Maximize2 size={12} />}
-            <span>{showFrameBezel ? 'Bezel' : 'Frameless'}</span>
-          </button>
-        </div>
-      </aside>
-
+    <div className="app-shell min-h-screen w-full bg-[#05070e] text-slate-100 flex flex-col items-center justify-center p-0 sm:p-4 select-none font-sans overflow-x-hidden">
       {/* Mobile Screen Container: Exactly 390×844 */}
       <main
-        className={`relative flex flex-col overflow-hidden bg-slate-950 transition-all duration-300 ${
-          showFrameBezel
-            ? 'w-full max-w-[390px] h-[844px] sm:rounded-[44px] shadow-[0_0_60px_rgba(0,0,0,0.9),_0_0_40px_rgba(0,242,254,0.12)] border-[8px] border-slate-800/90 ring-1 ring-slate-700/60'
-            : 'w-full max-w-[390px] h-[844px] rounded-none sm:rounded-3xl shadow-2xl border border-slate-800'
-        }`}
-        style={{
-          boxShadow: showFrameBezel
-            ? `0 25px 60px -15px rgba(0,0,0,0.95), 0 0 35px ${activeMood.color}20`
-            : undefined,
-        }}
+        data-swapped={isSwapped ? 'true' : 'false'}
+        className="app-main relative flex flex-col overflow-hidden bg-slate-950 transition-all duration-300 w-full max-w-[390px] h-[844px] rounded-none sm:rounded-3xl shadow-2xl border border-slate-800"
       >
         {/* iOS Phone Status Bar (Dynamic Island & Clock) */}
-        <PhoneStatusBar />
+        <div className="app-statusbar"><PhoneStatusBar /></div>
 
         {/* Cross-Axis Swap Layout Container: Encloses Globe and Feed for smooth vertical swap */}
         <div
           ref={middleContainerRef}
-          className="relative flex-1 min-h-0 w-full flex flex-col overflow-hidden"
+          className="app-middle relative flex-1 min-h-0 w-full flex flex-col overflow-hidden"
         >
           {/* 1. GLOBE & MAP — takes top ~40% of the screen OR expands to full/center screen when collapsed */}
           <section
@@ -836,8 +786,14 @@ export default function App() {
             onTouchStart={handleGlobeTouchStart}
             onTouchEnd={handleGlobeTouchEnd}
             data-swap-state={isSwapped ? 'swapped' : 'normal'}
-            title={isSwapped ? 'Drag downward past threshold to swap back' : 'Drag upward past threshold to swap with bottom card'}
-            className={`relative w-full overflow-hidden bg-[#070c18] ${
+            title={
+              isLandscapeWide
+                ? 'Drag upward past threshold to swap sides'
+                : isSwapped
+                ? 'Drag downward past threshold to swap back'
+                : 'Drag upward past threshold to swap with bottom card'
+            }
+            className={`app-globe relative w-full overflow-hidden bg-[#070c18] ${
               isFeedCollapsed ? 'flex-1 h-full' : 'h-[40%] shrink-0'
             }`}
             style={{
@@ -898,7 +854,7 @@ export default function App() {
           <section
             ref={cardSectionRef}
             aria-label="Section Content Panel"
-            className={`relative w-full flex flex-col bg-slate-950 border-x-2 border-t-2 rounded-t-2xl shadow-2xl ${
+            className={`app-feed relative w-full flex flex-col bg-slate-950 border-x-2 border-t-2 rounded-t-2xl shadow-2xl ${
               isFeedCollapsed
                 ? 'h-8 shrink-0 overflow-hidden cursor-pointer'
                 : 'flex-1 min-h-0 overflow-hidden'
@@ -1010,6 +966,7 @@ export default function App() {
         </div>
 
         {/* 3. BOTTOM CONTROLS */}
+        <div className="app-controls">
         <BottomControls
           activeNav={activeNav}
           onNavChange={(nav) => {
@@ -1022,9 +979,10 @@ export default function App() {
           onSubmitSearch={handleSearchToChat}
           likedCount={likedEventIds.size}
         />
+        </div>
 
         {/* Home Indicator line (iOS native cue) */}
-        <div className="w-full bg-slate-950 flex justify-center pb-2 pt-0 shrink-0">
+        <div className="app-homeind w-full bg-slate-950 flex justify-center pb-2 pt-0 shrink-0">
           <div className="w-32 h-1 bg-slate-700/80 rounded-full" />
         </div>
 
@@ -1038,16 +996,6 @@ export default function App() {
             setSelectedEvent(ev);
           }}
           onOpenStreetView={(target) => setStreetViewTarget(target)}
-        />
-
-        {/* Netlify MCP Connection Info Modal */}
-        <McpInfoModal
-          isOpen={mcpModalOpen}
-          onClose={() => setMcpModalOpen(false)}
-          serverInfo={mcpServerInfo}
-          isLoading={isMcpConnecting}
-          onRefresh={connectToMcp}
-          onQuickQuery={(q) => handleSearchToChat(q)}
         />
 
         {/* Street View Slide-Up Panel (direct center 1/3 bottom screen with top handle) */}

@@ -7,3 +7,9 @@ coverage/
 .env*
 !.env.example
 .aistudio
+_backup_src_*/
+*.env
+*.p8
+*.pem
+*.key
+package-lock.json
