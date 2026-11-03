@@ -802,52 +802,58 @@ export default function App() {
                 ))}
               </div>
 
-              {/* AI Studio-style Device Viewport Toggle (Phone | Landscape | Android TV 10') */}
+              {/* Size Change Viewport Toggle: Tall | Wide | TV 10' */}
               <div
                 className="app-device-toggle flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg"
-                role="group"
-                aria-label="Viewport Mode Toggle"
+                role="radiogroup"
+                aria-label="Size Change Viewport Toggle"
               >
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={effectiveDeviceMode === 'phone'}
                   onClick={() => {
                     setDeviceMode('phone');
                     if (globePosition === 'left' || globePosition === 'right') {
                       handleSelectGlobePosition('top');
                     }
                   }}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
                     effectiveDeviceMode === 'phone'
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="Phone Portrait View (390×844)"
+                  title="Tall Portrait View"
                 >
                   <Smartphone size={11} />
-                  <span>Phone</span>
+                  <span>Tall</span>
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={effectiveDeviceMode === 'landscape'}
                   onClick={() => setDeviceMode('landscape')}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
                     effectiveDeviceMode === 'landscape'
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="Landscape Split View"
+                  title="Wide Split View"
                 >
                   <Monitor size={11} />
-                  <span>Landscape</span>
+                  <span>Wide</span>
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={effectiveDeviceMode === 'tv'}
                   onClick={() => setDeviceMode('tv')}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
                     effectiveDeviceMode === 'tv'
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="Android TV 10-Foot UI Mode"
+                  title="TV 10-Foot UI Mode"
                 >
                   <Tv size={11} />
                   <span>TV 10&prime;</span>
