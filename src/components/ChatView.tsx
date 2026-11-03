@@ -14,6 +14,7 @@ import {
   Mic,
 } from 'lucide-react';
 import { safeShare } from '../utils/share';
+import { startMetaVoiceCapture, MetaVoiceCaptureHandle } from '../utils/metaVoice';
 
 export interface ChatMessage {
   id: string;
@@ -90,55 +91,67 @@ export const ChatView: React.FC<ChatViewProps> = ({
     onTogglePin(conv.id);
   };
 
-  // --- Press-and-speak speech-to-text (Web Speech API; mic hidden if unavailable) ---
-  const SpeechRec: any =
-    typeof window !== 'undefined'
-      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      : undefined;
-  const recRef = useRef<any>(null);
+  // --- Press-and-speak speech-to-text via Meta muse-voice-transcribe-1.0 (WAV 24kHz PCM + Web Speech interim preview) ---
+  const voiceSupported =
+    typeof window !== 'undefined' &&
+    Boolean(
+      navigator.mediaDevices?.getUserMedia ||
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition
+    );
+  const captureRef = useRef<MetaVoiceCaptureHandle | null>(null);
   const [listening, setListening] = useState(false);
-  const startListening = () => {
-    if (!SpeechRec || recRef.current) return;
+  const [transcribing, setTranscribing] = useState(false);
+
+  const startListening = async () => {
+    if (!voiceSupported || captureRef.current || listening || transcribing) return;
+    setListening(true);
     try {
-      const rec = new SpeechRec();
-      rec.lang = navigator.language || 'en-US';
-      rec.interimResults = true;
-      rec.continuous = false;
-      rec.onstart = () => setListening(true);
-      rec.onresult = (ev: any) => {
-        let text = '';
-        for (let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
-        setInputVal(text);
-      };
-      rec.onerror = () => {
-        setListening(false);
-        recRef.current = null;
-      };
-      rec.onend = () => {
-        setListening(false);
-        recRef.current = null;
-      };
-      recRef.current = rec;
-      rec.start();
+      const handle = await startMetaVoiceCapture((interim) => {
+        if (interim) setInputVal(interim);
+      });
+      captureRef.current = handle;
     } catch {
       setListening(false);
-      recRef.current = null;
+      captureRef.current = null;
     }
   };
-  const stopListening = () => {
+
+  const stopListening = async () => {
+    const handle = captureRef.current;
+    if (!handle) {
+      setListening(false);
+      return;
+    }
+    captureRef.current = null;
+    setListening(false);
+    setTranscribing(true);
     try {
-      recRef.current?.stop();
+      const finalTranscript = await handle.stopAndTranscribe();
+      if (finalTranscript) {
+        setInputVal(finalTranscript);
+        if (activeConversationId) {
+          onSendMessage(activeConversationId, finalTranscript);
+          setInputVal('');
+        }
+      }
     } catch {
       /* ignore */
+    } finally {
+      setTranscribing(false);
     }
   };
-  useEffect(() => () => {
-    try {
-      recRef.current?.abort?.();
-    } catch {
-      /* ignore */
-    }
-  }, []);
+
+  useEffect(
+    () => () => {
+      try {
+        captureRef.current?.cancel();
+      } catch {
+        /* ignore */
+      }
+    },
+    []
+  );
 
   const pinnedConvs = conversations.filter((c) => c.pinned);
   const recentConvs = conversations.filter((c) => !c.pinned);
@@ -241,12 +254,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
               >
                 <Pin size={15} className={activeConv.pinned ? 'fill-cyan-400' : ''} />
               </button>
-              {SpeechRec && (
+              {voiceSupported && (
                 <button
                   type="button"
-                  data-listening={listening ? 'true' : 'false'}
-                  title="Hold to speak"
-                  aria-label="Hold to speak"
+                  data-listening={listening || transcribing ? 'true' : 'false'}
+                  title={
+                    listening
+                      ? 'Listening (Meta Voice)... Release to send'
+                      : transcribing
+                      ? 'Transcribing with Meta muse-voice-transcribe-1.0...'
+                      : 'Hold to speak (Meta Voice)'
+                  }
+                  aria-label="Hold to speak (Meta Voice)"
                   onPointerDown={(e) => {
                     e.preventDefault();
                     startListening();

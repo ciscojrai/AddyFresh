@@ -15,9 +15,17 @@ import {
   ArrowLeft,
   ArrowRight,
   MousePointer2,
+  CloudRain,
+  TriangleAlert,
 } from 'lucide-react';
 import { haptic } from '../utils/haptics';
 import { initMapLibreWorker } from '../maplibreWorker';
+import {
+  loadHazardAlerts,
+  buildAlertPopupHtml,
+  HazardFeature,
+  HazardFeatureCollection,
+} from '../utils/hazardAlerts';
 
 interface GlobeViewProps {
   events: EventItem[];
@@ -246,6 +254,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   selectedEvent,
   onSelectEvent,
   activeMood,
+  radarActive,
 }) => {
   const starCanvasRef = useRef<HTMLCanvasElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -262,6 +271,25 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   const [cesiumReady, setCesiumReady] = useState<boolean>(false);
 
   const [autoRotate, setAutoRotate] = useState(true);
+  const [radarOn, setRadarOn] = useState<boolean>(() => Boolean(radarActive));
+  const [radarOpacity, setRadarOpacity] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem('radar-opacity'));
+      return Number.isFinite(saved) && saved >= 10 && saved <= 90 ? saved : 65;
+    } catch {
+      return 65;
+    }
+  });
+  const [alertsOn, setAlertsOn] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('alerts-on') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const [hazardFeatures, setHazardFeatures] = useState<HazardFeature[]>([]);
+  const [activeAlertCard, setActiveAlertCard] = useState<HazardFeature | null>(null);
+  const radarLayerCesiumRef = useRef<any>(null);
   const [telemetry, setTelemetry] = useState({
     lat: 30.2672,
     lng: -97.7431,
@@ -462,6 +490,18 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       handler.setInputAction((movement: any) => {
         isUserInteractingRef.current = true;
         const picked = viewer.scene.pick(movement.position);
+        if (Cesium.defined(picked) && picked.id && picked.id._hazardFeature) {
+          const hf = picked.id._hazardFeature as HazardFeature;
+          haptic.globePin();
+          setActiveAlertCard(hf);
+          const [lng, lat] = hf.geometry.coordinates;
+          const currentHeight = viewer.camera.positionCartographic?.height || 16000000;
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(lng, lat, Math.min(currentHeight, 4800000)),
+            duration: 1.4,
+          });
+          return;
+        }
         if (Cesium.defined(picked) && picked.id && picked.id._freshaddyEvent) {
           const ev = picked.id._freshaddyEvent as EventItem;
           haptic.globePin();
@@ -1311,7 +1351,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     }
   }, [selectedEvent, events, engineMode]);
 
-  // TV 10' D-Pad & Virtual Mouse Mode State (matching vega-addylife TV app reference)
+  // TV 10' D-Pad & Virtual Mouse Mode State
   const [tvMouseMode, setTvMouseMode] = useState<boolean>(true);
   const [tvCursorPos, setTvCursorPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -1430,6 +1470,283 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [tvMouseMode, handleTvDpadPan, handleTvDpadZoom]);
 
+  // Listen for voice / external events to toggle Rain Radar or Emergency Alerts
+  useEffect(() => {
+    const onSetRadar = (e: Event) => {
+      const custom = e as CustomEvent<{ enabled?: boolean; opacity?: number }>;
+      if (typeof custom.detail?.enabled === 'boolean') {
+        setRadarOn(custom.detail.enabled);
+      }
+      if (typeof custom.detail?.opacity === 'number') {
+        setRadarOpacity(Math.min(90, Math.max(10, custom.detail.opacity)));
+      }
+    };
+    const onSetAlerts = (e: Event) => {
+      const custom = e as CustomEvent<{ enabled?: boolean }>;
+      if (typeof custom.detail?.enabled === 'boolean') {
+        setAlertsOn(custom.detail.enabled);
+        try {
+          localStorage.setItem('alerts-on', custom.detail.enabled ? '1' : '0');
+        } catch {}
+      }
+    };
+    window.addEventListener('freshaddy:set-radar', onSetRadar);
+    window.addEventListener('freshaddy:set-alerts', onSetAlerts);
+    return () => {
+      window.removeEventListener('freshaddy:set-radar', onSetRadar);
+      window.removeEventListener('freshaddy:set-alerts', onSetAlerts);
+    };
+  }, []);
+
+  // Rain Radar layer sync: RainViewer live radar tiles for both MapLibre and Cesium
+  useEffect(() => {
+    const op = Math.min(0.9, Math.max(0.15, radarOpacity / 100));
+    const map = mapRef.current;
+    const viewer = cesiumViewerRef.current;
+    const Cesium = (window as any).Cesium;
+
+    if (!radarOn) {
+      if (map && map.getStyle() && map.getLayer('radar-layer')) {
+        map.setLayoutProperty('radar-layer', 'visibility', 'none');
+      }
+      if (viewer && !viewer.isDestroyed() && radarLayerCesiumRef.current) {
+        try {
+          radarLayerCesiumRef.current.show = false;
+        } catch {}
+      }
+      return;
+    }
+
+    let cancelled = false;
+    fetch('https://api.rainviewer.com/public/weather-maps.json')
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        const past = data?.radar?.past;
+        if (!past?.length) return;
+        const latestPath = past[past.length - 1].path;
+        const host = data.host || 'https://tilecache.rainviewer.com';
+        const tileUrl = `${host}${latestPath}/256/{z}/{x}/{y}/2/1_1.png`;
+
+        if (map && map.getStyle()) {
+          try {
+            if (map.getLayer('radar-layer')) map.removeLayer('radar-layer');
+            if (map.getSource('radar')) map.removeSource('radar');
+            map.addSource('radar', {
+              type: 'raster',
+              tiles: [tileUrl],
+              tileSize: 256,
+              maxzoom: 7,
+            });
+            map.addLayer({
+              id: 'radar-layer',
+              type: 'raster',
+              source: 'radar',
+              paint: { 'raster-opacity': op },
+              layout: { visibility: 'visible' },
+            });
+          } catch {}
+        }
+
+        if (viewer && !viewer.isDestroyed() && Cesium) {
+          try {
+            if (radarLayerCesiumRef.current) {
+              viewer.imageryLayers.remove(radarLayerCesiumRef.current, true);
+              radarLayerCesiumRef.current = null;
+            }
+            const provider = new Cesium.UrlTemplateImageryProvider({
+              url: tileUrl,
+              maximumLevel: 7,
+              tileWidth: 256,
+              tileHeight: 256,
+            });
+            const layer = viewer.imageryLayers.addImageryProvider(provider);
+            layer.alpha = op;
+            layer.show = true;
+            radarLayerCesiumRef.current = layer;
+          } catch {}
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [radarOn, radarOpacity, cesiumReady]);
+
+  // GDACS / JTWC / USGS Emergency Hazard Alerts + 20-Day Post-Expiry Awareness Window
+  useEffect(() => {
+    const map = mapRef.current;
+    const viewer = cesiumViewerRef.current;
+    const Cesium = (window as any).Cesium;
+    const ALERT_LAYERS = ['hazard-alert-hit', 'hazard-alert-halo', 'hazard-alert-dot'];
+
+    if (!alertsOn) {
+      setActiveAlertCard(null);
+      if (map && map.getStyle()) {
+        for (const id of ALERT_LAYERS) {
+          if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
+        }
+      }
+      if (viewer && !viewer.isDestroyed()) {
+        const toRem: any[] = [];
+        viewer.entities.values.forEach((ent: any) => {
+          if (ent._isHazardAlert) toRem.push(ent);
+        });
+        toRem.forEach((ent) => viewer.entities.remove(ent));
+      }
+      return;
+    }
+
+    let cancelled = false;
+    loadHazardAlerts((fc: HazardFeatureCollection) => {
+      if (cancelled) return;
+      setHazardFeatures(fc.features);
+      (window as any).__freshaddy_hazard_alerts = fc.features;
+
+      // 1. Paint on MapLibre 3D Globe
+      if (map && map.getStyle()) {
+        try {
+          const src = map.getSource('hazard-alerts') as maplibregl.GeoJSONSource | undefined;
+          if (src) src.setData(fc as any);
+          else map.addSource('hazard-alerts', { type: 'geojson', data: fc as any });
+
+          const color: any = [
+            'match',
+            ['get', 'severity'],
+            'EXTREME',
+            '#ef4444',
+            'SEVERE',
+            '#f97316',
+            'MODERATE',
+            '#facc15',
+            '#a3e635',
+          ];
+
+          if (!map.getLayer('hazard-alert-hit')) {
+            map.addLayer({
+              id: 'hazard-alert-hit',
+              type: 'circle',
+              source: 'hazard-alerts',
+              paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 18, 4, 26, 8, 34],
+                'circle-color': '#000000',
+                'circle-opacity': 0.01,
+              },
+            });
+          }
+          if (!map.getLayer('hazard-alert-halo')) {
+            map.addLayer({
+              id: 'hazard-alert-halo',
+              type: 'circle',
+              source: 'hazard-alerts',
+              paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 9, 6, 22],
+                'circle-color': color,
+                'circle-opacity': 0.22,
+                'circle-stroke-color': color,
+                'circle-stroke-width': 1.4,
+                'circle-stroke-opacity': 0.85,
+              },
+            });
+          }
+          if (!map.getLayer('hazard-alert-dot')) {
+            map.addLayer({
+              id: 'hazard-alert-dot',
+              type: 'circle',
+              source: 'hazard-alerts',
+              paint: {
+                'circle-radius': 4.5,
+                'circle-color': color,
+                'circle-stroke-color': '#1a0000',
+                'circle-stroke-width': 1.2,
+              },
+            });
+          }
+          for (const id of ALERT_LAYERS) {
+            if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
+          }
+          if (!(map as any).__alertsClickBound) {
+            (map as any).__alertsClickBound = true;
+            const openAlert = (e: maplibregl.MapLayerMouseEvent) => {
+              const orig = e.originalEvent as MouseEvent & { __alertOpened?: boolean };
+              if (orig.__alertOpened) return;
+              orig.__alertOpened = true;
+              const f = e.features?.[0];
+              if (!f) return;
+              const coords = (f.geometry as any).coordinates as [number, number];
+              const props = (f.properties ?? {}) as any;
+              setActiveAlertCard({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: coords },
+                properties: props,
+              });
+            };
+            for (const id of ALERT_LAYERS) {
+              map.on('mouseenter', id, () => {
+                map.getCanvas().style.cursor = 'pointer';
+              });
+              map.on('mouseleave', id, () => {
+                map.getCanvas().style.cursor = '';
+              });
+              map.on('click', id, openAlert);
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Paint on Cesium Ion 3D Globe
+      if (viewer && !viewer.isDestroyed() && Cesium) {
+        try {
+          const toRem: any[] = [];
+          viewer.entities.values.forEach((ent: any) => {
+            if (ent._isHazardAlert) toRem.push(ent);
+          });
+          toRem.forEach((ent) => viewer.entities.remove(ent));
+
+          fc.features.forEach((hf) => {
+            const [lng, lat] = hf.geometry.coordinates;
+            const sev = hf.properties.severity;
+            const hex =
+              sev === 'EXTREME'
+                ? '#ef4444'
+                : sev === 'SEVERE'
+                ? '#f97316'
+                : sev === 'MODERATE'
+                ? '#facc15'
+                : '#a3e635';
+            const ent = viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(lng, lat, 55),
+              point: {
+                pixelSize: 11,
+                color: Cesium.Color.fromCssColorString(hex),
+                outlineColor: Cesium.Color.fromCssColorString('#ffffff').withAlpha(0.85),
+                outlineWidth: 2.5,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+              label: {
+                text: `⚠️ ${hf.properties.hazard.toUpperCase()}`,
+                font: 'bold 9.5px system-ui, -apple-system, sans-serif',
+                fillColor: Cesium.Color.fromCssColorString('#fef08a'),
+                showBackground: true,
+                backgroundColor: Cesium.Color.fromCssColorString('#0d1117').withAlpha(0.88),
+                backgroundPadding: new Cesium.Cartesian2(5, 3),
+                pixelOffset: new Cesium.Cartesian2(0, -16),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+            });
+            ent._isHazardAlert = true;
+            ent._hazardFeature = hf;
+          });
+        } catch {}
+      }
+    }).catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [alertsOn, cesiumReady]);
+
   const altMeters = telemetry.altMeters || zoomToAltitudeMeters(telemetry.zoom);
   const gsdMeters = (altMeters / 2650).toFixed(2);
   const isStreetLevel = altMeters < 8500 || telemetry.zoom >= 12;
@@ -1515,12 +1832,144 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </div>
       </div>
 
-      {/* BOTTOM-CENTER: Circular Tactical Control Dock */}
+      {/* Compact Emergency Alert ID Card Popup (with 20-Day Post-Expiry Awareness) */}
+      {activeAlertCard && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          data-testid="hazard-alert-id-card"
+          className="absolute top-12 right-3.5 z-30 pointer-events-auto animate-in fade-in zoom-in-95 duration-150"
+        >
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setActiveAlertCard(null)}
+              aria-label="Close alert card"
+              title="Close alert card"
+              className="absolute top-2 right-2.5 z-10 text-slate-400 hover:text-white text-sm leading-none px-1 py-0.5 cursor-pointer"
+            >
+              ×
+            </button>
+            <div
+              dangerouslySetInnerHTML={{
+                __html: buildAlertPopupHtml(activeAlertCard.properties),
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* BOTTOM-RIGHT: Circular Tactical Control Dock + Rain Radar Pill & Alerts Toggle */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="absolute bottom-2.5 right-3 z-20 hidden sm:flex items-center gap-1.5 pointer-events-auto"
+        className="absolute bottom-2.5 right-3 z-20 flex flex-wrap items-center justify-end gap-1.5 pointer-events-auto"
       >
+        {/* Rain Radar Pill: CloudRain toggle + opacity slider (10..90%) + '+' */}
+        <div
+          className={`flex items-center gap-1 rounded-full py-0.5 pl-1 pr-2 border backdrop-blur-md transition-all ${
+            radarOn
+              ? 'bg-cyan-950/85 border-cyan-400/80 shadow-[0_0_12px_rgba(34,211,238,0.3)]'
+              : 'bg-slate-950/80 border-slate-700/80'
+          }`}
+        >
+          <button
+            type="button"
+            aria-pressed={radarOn}
+            onClick={() => {
+              haptic.globePinLight();
+              setRadarOn((prev) => !prev);
+            }}
+            title={radarOn ? 'Turn off Rain Radar' : 'Turn on Rain Radar'}
+            aria-label={radarOn ? 'Turn off Rain Radar' : 'Turn on Rain Radar'}
+            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+              radarOn ? 'bg-cyan-500/30 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <CloudRain size={12} />
+          </button>
+          <input
+            type="range"
+            min={10}
+            max={90}
+            value={radarOpacity}
+            disabled={!radarOn}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              setRadarOpacity(val);
+              try {
+                localStorage.setItem('radar-opacity', String(val));
+              } catch {}
+            }}
+            title={`Rain Radar opacity: ${radarOpacity}%`}
+            aria-label="Rain Radar opacity"
+            className="w-11 sm:w-12 h-1 accent-cyan-400 cursor-pointer disabled:opacity-40"
+          />
+          <span
+            className={`text-[10px] font-mono font-bold select-none ${
+              radarOn ? 'text-cyan-300' : 'text-slate-500'
+            }`}
+          >
+            +
+          </span>
+        </div>
+
+        {/* Emergency Alerts Toggle (GDACS / JTWC / USGS + 20-Day Post-Expiry Awareness) */}
+        <button
+          type="button"
+          aria-pressed={alertsOn}
+          onClick={() => {
+            haptic.globePinLight();
+            const next = !alertsOn;
+            setAlertsOn(next);
+            try {
+              localStorage.setItem('alerts-on', next ? '1' : '0');
+            } catch {}
+            if (next && hazardFeatures.length > 0 && !activeAlertCard) {
+              setActiveAlertCard(hazardFeatures[0]);
+            }
+          }}
+          title={
+            alertsOn
+              ? 'Emergency Alerts ON (GDACS/JTWC · 20-Day Post-Expiry Awareness)'
+              : 'Show Emergency Alerts (GDACS/JTWC · 20-Day Post-Expiry Awareness)'
+          }
+          aria-label="Toggle Emergency Alerts (20-day awareness)"
+          className={`h-7 px-2 rounded-full flex items-center gap-1 border backdrop-blur-md transition-all cursor-pointer ${
+            alertsOn
+              ? 'bg-amber-500/25 border-amber-400/85 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
+              : 'bg-slate-950/80 border-slate-700/80 text-slate-400 hover:text-amber-300'
+          }`}
+        >
+          <TriangleAlert size={12} />
+          <span className="font-mono text-[9px] font-bold tracking-wider">20D</span>
+        </button>
+
+        {/* Inspect Cyclone / GDACS Alert Card shortcut when alerts are on */}
+        {alertsOn && hazardFeatures.length > 0 && !activeAlertCard && (
+          <button
+            type="button"
+            onClick={() => {
+              const target = hazardFeatures[0];
+              setActiveAlertCard(target);
+              const [lng, lat] = target.geometry.coordinates;
+              const viewer = cesiumViewerRef.current;
+              const Cesium = (window as any).Cesium;
+              if (engineMode === 'cesium' && viewer && !viewer.isDestroyed() && Cesium) {
+                viewer.camera.flyTo({
+                  destination: Cesium.Cartesian3.fromDegrees(lng, lat, 4800000),
+                  duration: 1.4,
+                });
+              } else if (mapRef.current) {
+                mapRef.current.flyTo({ center: [lng, lat], zoom: 3.8, duration: 1400 });
+              }
+            }}
+            title="View active GDACS / JTWC Cyclone Alert Card"
+            className="h-7 px-2 rounded-full bg-red-950/80 border border-red-500/70 text-red-200 hover:bg-red-900/80 font-mono text-[9px] font-semibold flex items-center gap-1 backdrop-blur-md transition-all cursor-pointer"
+          >
+            <span>⚠️ {hazardFeatures[0].properties.hazard}</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setAutoRotate((prev) => !prev)}
@@ -1709,7 +2158,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </div>
       </div>
 
-      {/* TV 10' BOTTOM D-PAD & MOUSE NAVIGATION BAR (matches vega-addylife TV app reference) */}
+      {/* TV 10' BOTTOM D-PAD & MOUSE NAVIGATION BAR */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}

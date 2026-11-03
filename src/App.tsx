@@ -25,6 +25,7 @@ import { initMapLibreWorker } from './maplibreWorker.ts';
 import { GoogleMap3DView } from './components/GoogleMap3DView';
 import { ChevronUp, Smartphone, Monitor, Tv, Globe } from 'lucide-react';
 import { useHaptic } from './hooks/useHaptic';
+import { speakWithAddyVoice } from './utils/metaVoice';
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
   {
@@ -655,11 +656,17 @@ export default function App() {
         if (!r.ok) throw new Error(`muse ${r.status}`);
         return r.json();
       })
-      .then((data: { text?: string; actions?: Array<{ type: string; lat?: number; lon?: number }> }) => {
-        setAssistantText(data.text || 'Muse had no answer for that.');
+      .then((data: { text?: string; actions?: Array<{ type: string; lat?: number; lon?: number; enabled?: boolean }> }) => {
+        const replyText = data.text || 'Muse had no answer for that.';
+        setAssistantText(replyText);
+        speakWithAddyVoice(replyText);
         (data.actions || []).forEach((a) => {
           if (a.type === 'fly_to' && typeof a.lat === 'number' && typeof a.lon === 'number') {
             flyCameraToCoordinate({ lat: a.lat, lng: a.lon, target: 'globe' });
+          } else if (a.type === 'toggle_radar') {
+            window.dispatchEvent(new CustomEvent('freshaddy:set-radar', { detail: { enabled: a.enabled !== false } }));
+          } else if (a.type === 'toggle_alerts') {
+            window.dispatchEvent(new CustomEvent('freshaddy:set-alerts', { detail: { enabled: a.enabled !== false } }));
           }
         });
       })

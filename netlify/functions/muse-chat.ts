@@ -1,6 +1,8 @@
-const MUSE_SYSTEM_PROMPT = `You are Muse, the assistant inside FreshAddy, a 3D globe app for discovering live music, festivals and nightlife.
+const MUSE_SYSTEM_PROMPT = `You are Muse, the assistant inside FreshAddy, a 3D globe app for discovering live music, festivals, nightlife, weather radar, and GDACS/JTWC emergency alerts.
 Keep answers short (1-3 sentences), friendly and concrete. Use the event list provided as context when it fits.
 When the user wants to see or go to a place, call the fly_to tool with that place's latitude, longitude and a short label.
+When the user asks to turn on/off rain radar or weather radar, call toggle_radar.
+When the user asks to show/hide emergency alerts, cyclone alerts, or hazard alerts, call toggle_alerts.
 Do not invent ticket prices or times that are not in the context.`;
 
 const MUSE_TOOLS = [
@@ -17,6 +19,34 @@ const MUSE_TOOLS = [
           label: { type: 'string', description: 'Short place label, e.g. Tokyo' },
         },
         required: ['lat', 'lon', 'label'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'toggle_radar',
+      description: 'Turn the live Rain Radar overlay on or off on the 3D globe.',
+      parameters: {
+        type: 'object',
+        properties: {
+          enabled: { type: 'boolean', description: 'true to enable rain radar, false to disable' },
+        },
+        required: ['enabled'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'toggle_alerts',
+      description: 'Turn the GDACS / JTWC / USGS Emergency Alerts layer (with 20-day post-expiry awareness) on or off on the 3D globe.',
+      parameters: {
+        type: 'object',
+        properties: {
+          enabled: { type: 'boolean', description: 'true to enable emergency alerts, false to disable' },
+        },
+        required: ['enabled'],
       },
     },
   },
@@ -67,7 +97,11 @@ export const handler = async (event: { httpMethod?: string; body?: string | null
     { role: 'user', content: message },
   ];
 
-  const actions: Array<{ type: 'fly_to'; lat: number; lon: number; label: string }> = [];
+  const actions: Array<
+    | { type: 'fly_to'; lat: number; lon: number; label: string }
+    | { type: 'toggle_radar'; enabled: boolean }
+    | { type: 'toggle_alerts'; enabled: boolean }
+  > = [];
   const scrub = (t: string) => t.split(key).join('***').slice(0, 300);
 
   try {
@@ -106,6 +140,10 @@ export const handler = async (event: { httpMethod?: string; body?: string | null
           }
           if (call.function?.name === 'fly_to' && Number.isFinite(args.lat) && Number.isFinite(args.lon)) {
             actions.push({ type: 'fly_to', lat: args.lat, lon: args.lon, label: String(args.label || '') });
+          } else if (call.function?.name === 'toggle_radar') {
+            actions.push({ type: 'toggle_radar', enabled: args.enabled !== false });
+          } else if (call.function?.name === 'toggle_alerts') {
+            actions.push({ type: 'toggle_alerts', enabled: args.enabled !== false });
           }
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ok: true }) });
         }
@@ -115,7 +153,12 @@ export const handler = async (event: { httpMethod?: string; body?: string | null
       }
     }
 
-    if (!text && actions.length > 0) text = `Taking you to ${actions[0].label || 'that spot'}.`;
+    if (!text && actions.length > 0) {
+      const first = actions[0];
+      if (first.type === 'fly_to') text = `Taking you to ${first.label || 'that spot'}.`;
+      else if (first.type === 'toggle_radar') text = `Rain Radar turned ${first.enabled ? 'on' : 'off'}.`;
+      else if (first.type === 'toggle_alerts') text = `Emergency Alerts turned ${first.enabled ? 'on' : 'off'}.`;
+    }
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },

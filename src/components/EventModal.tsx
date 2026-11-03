@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { EventItem, StreetViewTarget } from '../types';
 import { Heart, Compass, MapPin, Users, Cloud, Play } from 'lucide-react';
 import { useHaptic } from '../hooks/useHaptic';
+import {
+  evaluateEventAlertStatus,
+  formatAlertDateRange,
+  providerFromUrl,
+  HazardFeature,
+} from '../utils/hazardAlerts';
 
 interface EventModalProps {
   event: EventItem | null;
@@ -31,6 +37,14 @@ export const EventModal: React.FC<EventModalProps> = ({
   }, [event?.id, triggerPanelOpen]);
 
   if (!event) return null;
+
+  const liveAlerts: HazardFeature[] =
+    typeof window !== 'undefined' && Array.isArray((window as any).__freshaddy_hazard_alerts)
+      ? (window as any).__freshaddy_hazard_alerts
+      : [];
+  const alertEval = evaluateEventAlertStatus(event.lat, event.lng, event.country, liveAlerts);
+  const nearest = alertEval.nearestAlert;
+  const nearestProvider = nearest?.url ? providerFromUrl(nearest.url) || nearest.publisher : '';
 
   const handleClose = () => {
     triggerPanelClose();
@@ -121,6 +135,42 @@ export const EventModal: React.FC<EventModalProps> = ({
               </p>
             </div>
           </div>
+        </div>
+
+        {/* 20-Day Emergency Alert Awareness Row on ID Card */}
+        <div
+          className="px-3 py-2 rounded-xl bg-[#0d1117] border border-slate-800/90 text-[11.5px] leading-snug"
+          data-testid="event-card-20day-alert-row"
+        >
+          <div className="font-semibold" style={{ color: alertEval.color }}>
+            {alertEval.label}
+          </div>
+          {nearest && (
+            <div className="mt-1 text-[11px] text-slate-300 flex flex-wrap items-center gap-1.5">
+              <span>
+                ⚠️ {nearest.hazard} · {nearest.countryFallback || event.country} ·{' '}
+                {nearest.severity === 'EXTREME' ? 'Extreme' : 'Severe'}
+                {formatAlertDateRange(nearest.from, nearest.to)
+                  ? ` · ${formatAlertDateRange(nearest.from, nearest.to)}`
+                  : ''}
+              </span>
+              {nearest.url && (
+                <span>
+                  <a
+                    href={nearest.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-cyan-400 hover:underline font-medium"
+                  >
+                    {nearestProvider ? `${nearestProvider} ` : ''}Details ↗
+                  </a>
+                  {nearest.upstream && (
+                    <span className="text-slate-400"> · via {nearest.upstream}</span>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Description */}
