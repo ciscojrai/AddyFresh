@@ -1,7 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import { EventItem, Mood, CameraPerspective, ThemeMode } from '../types';
-import { Plus, Minus, Globe, Compass, Box, Eye, RotateCw, Layers } from 'lucide-react';
+import {
+  Plus,
+  Minus,
+  Globe,
+  Compass,
+  Box,
+  Eye,
+  RotateCw,
+  Layers,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  MousePointer2,
+} from 'lucide-react';
 import { haptic } from '../utils/haptics';
 import { initMapLibreWorker } from '../maplibreWorker';
 
@@ -1297,6 +1311,125 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     }
   }, [selectedEvent, events, engineMode]);
 
+  // TV 10' D-Pad & Virtual Mouse Mode State (matching vega-addylife TV app reference)
+  const [tvMouseMode, setTvMouseMode] = useState<boolean>(true);
+  const [tvCursorPos, setTvCursorPos] = useState<{ x: number; y: number } | null>(null);
+
+  const handleTvDpadPan = useCallback(
+    (dir: 'up' | 'down' | 'left' | 'right') => {
+      haptic.globePinLight();
+      isUserInteractingRef.current = true;
+      setAutoRotate(false);
+
+      const viewer = cesiumViewerRef.current;
+      const Cesium = (window as any).Cesium;
+      if (engineMode === 'cesium' && viewer && !viewer.isDestroyed() && Cesium) {
+        const carto = viewer.camera.positionCartographic;
+        if (carto) {
+          const h = Math.max(250, carto.height);
+          // Scale step degrees smoothly from orbital altitude down to street level
+          const stepDeg = Math.max(0.0012, Math.min(12, h / 1100000));
+          const curLat = Cesium.Math.toDegrees(carto.latitude);
+          const curLng = Cesium.Math.toDegrees(carto.longitude);
+          const nextLat = Math.max(
+            -82,
+            Math.min(82, curLat + (dir === 'up' ? stepDeg : dir === 'down' ? -stepDeg : 0))
+          );
+          const nextLng = curLng + (dir === 'right' ? stepDeg : dir === 'left' ? -stepDeg : 0);
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(nextLng, nextLat, h),
+            orientation: {
+              heading: viewer.camera.heading,
+              pitch: viewer.camera.pitch,
+              roll: 0,
+            },
+            duration: 0.45,
+          });
+        }
+        return;
+      }
+
+      const map = mapRef.current;
+      if (!map) return;
+      const z = map.getZoom();
+      const step = Math.max(0.0015, 18 / Math.pow(2, Math.max(0, z - 1)));
+      const c = map.getCenter();
+      map.easeTo({
+        center: [
+          c.lng + (dir === 'right' ? step : dir === 'left' ? -step : 0),
+          Math.max(-82, Math.min(82, c.lat + (dir === 'up' ? step : dir === 'down' ? -step : 0))),
+        ],
+        duration: 380,
+      });
+    },
+    [engineMode]
+  );
+
+  const handleTvDpadZoom = useCallback(
+    (delta: 'in' | 'out') => {
+      haptic.globePinLight();
+      isUserInteractingRef.current = true;
+      const viewer = cesiumViewerRef.current;
+      if (engineMode === 'cesium' && viewer && !viewer.isDestroyed()) {
+        const h = viewer.camera.positionCartographic?.height || 10000000;
+        if (delta === 'in') {
+          viewer.camera.zoomIn(Math.max(120, h * 0.48));
+        } else {
+          viewer.camera.zoomOut(Math.min(12000000, Math.max(200, h * 0.85)));
+        }
+        return;
+      }
+      const map = mapRef.current;
+      if (!map) return;
+      const curZ = map.getZoom();
+      const nextZoom =
+        delta === 'in'
+          ? Math.min(19.2, curZ + (curZ < 6 ? 1.4 : 1.1))
+          : Math.max(1.1, curZ - (curZ > 10 ? 1.4 : 1.1));
+      const nextPitch =
+        delta === 'in' && nextZoom >= 12.5
+          ? 62
+          : delta === 'out' && nextZoom < 6
+          ? 0
+          : map.getPitch();
+      map.easeTo({ zoom: nextZoom, pitch: nextPitch, duration: 420 });
+    },
+    [engineMode]
+  );
+
+  // Support physical TV remote / keyboard arrow & +/- keys when in TV D-Pad mode
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const shell = document.querySelector('.app-shell');
+      if (!shell || shell.getAttribute('data-device') !== 'tv') return;
+      if (tvMouseMode) return;
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        handleTvDpadPan('up');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        handleTvDpadPan('down');
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleTvDpadPan('left');
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleTvDpadPan('right');
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        handleTvDpadZoom('in');
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        handleTvDpadZoom('out');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [tvMouseMode, handleTvDpadPan, handleTvDpadZoom]);
+
   const altMeters = telemetry.altMeters || zoomToAltitudeMeters(telemetry.zoom);
   const gsdMeters = (altMeters / 2650).toFixed(2);
   const isStreetLevel = altMeters < 8500 || telemetry.zoom >= 12;
@@ -1307,7 +1440,15 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     : 'METRO RECON // ACTIVE TARGET';
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-[#02050d] select-none touch-none">
+    <div
+      onMouseMove={(e) => {
+        if (!tvMouseMode) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        setTvCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      }}
+      onMouseLeave={() => setTvCursorPos(null)}
+      className="relative w-full h-full overflow-hidden bg-[#02050d] select-none touch-none"
+    >
       {/* Hide default Cesium credit clutter so tactical HUD remains clean */}
       <style>{`
         .cesium-viewer-bottom, .cesium-viewer-toolbar, .cesium-viewer-animationContainer, .cesium-viewer-timelineContainer {
@@ -1567,6 +1708,105 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           </span>
         </div>
       </div>
+
+      {/* TV 10' BOTTOM D-PAD & MOUSE NAVIGATION BAR (matches vega-addylife TV app reference) */}
+      <div
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        className="app-tv-dpad-bar hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-30 items-center gap-3 pointer-events-auto"
+        role="toolbar"
+        aria-label="Android TV 10-Foot Globe Navigation Bar"
+      >
+        <button
+          type="button"
+          onClick={() => handleTvDpadPan('up')}
+          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
+          title="D-Pad Pan Up"
+        >
+          <ArrowUp size={20} />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTvDpadPan('down')}
+          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
+          title="D-Pad Pan Down"
+        >
+          <ArrowDown size={20} />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTvDpadPan('left')}
+          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
+          title="D-Pad Pan Left"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTvDpadPan('right')}
+          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
+          title="D-Pad Pan Right"
+        >
+          <ArrowRight size={20} />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTvDpadZoom('out')}
+          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
+          title="Zoom Out (-)"
+        >
+          <Minus size={20} />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTvDpadZoom('in')}
+          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
+          title="Zoom In (+)"
+        >
+          <Plus size={20} />
+        </button>
+
+        {/* Mouse Toggle Button with Floating "Mouse" / "D-Pad" Pill Badge */}
+        <div className="relative flex flex-col items-center">
+          <span
+            className={`absolute -top-7 px-3 py-0.5 rounded-full text-[11px] font-bold tracking-wide border backdrop-blur-md whitespace-nowrap transition-all ${
+              tvMouseMode
+                ? 'bg-slate-950/90 border-cyan-400 text-white shadow-[0_0_12px_rgba(34,211,238,0.45)]'
+                : 'bg-slate-950/85 border-slate-600 text-slate-300'
+            }`}
+          >
+            {tvMouseMode ? 'Mouse' : 'D-Pad'}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              haptic.globePinLight();
+              setTvMouseMode((prev) => !prev);
+            }}
+            className={`w-13 h-13 rounded-full flex items-center justify-center border-2 transition-all active:scale-95 cursor-pointer ${
+              tvMouseMode
+                ? 'bg-cyan-400 border-cyan-200 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.8)]'
+                : 'bg-slate-900/90 border-slate-600 text-slate-300 hover:border-cyan-400/60'
+            }`}
+            title="Toggle TV D-Pad / Virtual Mouse Mode"
+          >
+            <MousePointer2 size={22} className="fill-current" />
+          </button>
+        </div>
+      </div>
+
+      {/* TV 10' High-Visibility Virtual Mouse Reticle Ring */}
+      {tvMouseMode && tvCursorPos && (
+        <div
+          style={{
+            left: `${tvCursorPos.x}px`,
+            top: `${tvCursorPos.y}px`,
+          }}
+          className="app-tv-cursor-ring hidden pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 z-40 w-8 h-8 rounded-full border-2 border-cyan-300 bg-cyan-400/15 shadow-[0_0_18px_rgba(34,211,238,0.75)] items-center justify-center"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#fff]" />
+        </div>
+      )}
     </div>
   );
 };

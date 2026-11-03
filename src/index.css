@@ -273,3 +273,52 @@ html, body, #root {
   outline-offset: 2px !important;
   box-shadow: 0 0 16px rgba(34, 211, 238, 0.55) !important;
 }
+
+/* Show TV D-Pad + Mouse bottom bar & virtual cursor ring in TV 10' mode */
+.app-shell[data-device="tv"] .app-tv-dpad-bar {
+  display: flex !important;
+}
+
+.app-shell[data-device="tv"] .app-tv-cursor-ring {
+  display: flex !important;
+}
+
+/* TV 10' High-Contrast Yellow Pill Action Buttons on Event Sheet (Watch now | Street View | Save) */
+.app-shell[data-device="tv"] .app-tv-only-label {
+  display: inline !important;
+}
+
+.app-shell[data-device="tv"] .app-default-label {
+  display: none !important;
+}
+
+.app-shell[data-device="tv"] .app-eventsheet-actions {
+  gap: 10px !important;
+  padding: 12px 14px !important;
+}
+
+.app-shell[data-device="tv"] .app-event-btn-primary,
+.app-shell[data-device="tv"] .app-event-btn-street,
+.app-shell[data-device="tv"] .app-event-btn-save {
+  flex: 1 1 0 !important;
+  border-radius: 9999px !important;
+  background-color: #facc15 !important;
+  border: 2.5px solid #fef9c3 !important;
+  color: #090d16 !important;
+  font-weight: 800 !important;
+  font-size: 15px !important;
+  padding: 10px 14px !important;
+  box-shadow: 0 4px 18px rgba(250, 204, 21, 0.45) !important;
+}
+
+.app-shell[data-device="tv"] .app-event-btn-primary:hover,
+.app-shell[data-device="tv"] .app-event-btn-street:hover,
+.app-shell[data-device="tv"] .app-event-btn-save:hover {
+  background-color: #fde047 !important;
+  transform: scale(1.03);
+}
+
+.app-shell[data-device="tv"] .app-event-btn-street svg,
+.app-shell[data-device="tv"] .app-event-btn-save svg {
+  color: #090d16 !important;
+}

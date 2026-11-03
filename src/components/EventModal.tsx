@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { EventItem, StreetViewTarget } from '../types';
-import { Heart, Compass, MapPin, Users, Cloud } from 'lucide-react';
+import { Heart, Compass, MapPin, Users, Cloud, Play } from 'lucide-react';
 import { useHaptic } from '../hooks/useHaptic';
 
 interface EventModalProps {
@@ -145,17 +145,18 @@ export const EventModal: React.FC<EventModalProps> = ({
         )}
       </div>
 
-      {/* 3. Action Footer Buttons */}
-      <div className="p-2.5 bg-[#070b16] border-t border-slate-800 flex items-center gap-2 shrink-0">
+      {/* 3. Action Footer Buttons (Watch now / Center on Globe | Street View | Save — no hotel modals) */}
+      <div className="app-eventsheet-actions p-2.5 bg-[#070b16] border-t border-slate-800 flex items-center gap-2 shrink-0">
         <button
           onClick={() => {
             onCenterOnGlobe(event);
             onClose();
           }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold shadow-lg shadow-cyan-950/40 transition-colors cursor-pointer"
+          className="app-event-btn-primary flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold shadow-lg shadow-cyan-950/40 transition-all cursor-pointer"
         >
-          <Compass size={15} />
-          <span>Center on Globe</span>
+          <Play size={14} className="fill-current shrink-0" />
+          <span className="app-tv-only-label hidden">Watch now</span>
+          <span className="app-default-label">Center on Globe</span>
         </button>
 
         <button
@@ -175,25 +176,27 @@ export const EventModal: React.FC<EventModalProps> = ({
               );
             }
           }}
-          className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 transition-colors cursor-pointer"
+          className="app-event-btn-street flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold transition-all cursor-pointer"
           title="Google Street View"
         >
-          <Compass size={16} className="text-cyan-400" />
+          <Compass size={15} className="text-cyan-400 shrink-0" />
+          <span>Street View</span>
         </button>
 
         <button
           onClick={(e) => onToggleLike(e, event)}
-          className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 transition-colors cursor-pointer"
+          className="app-event-btn-save flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold transition-all cursor-pointer"
           title="Save event"
         >
           <Heart
-            size={16}
+            size={15}
             className={
               isLiked
-                ? 'fill-rose-500 text-rose-500 stroke-rose-500'
-                : 'text-slate-400 hover:text-rose-400'
+                ? 'fill-rose-500 text-rose-500 stroke-rose-500 shrink-0'
+                : 'text-slate-400 hover:text-rose-400 shrink-0'
             }
           />
+          <span className="app-tv-only-label hidden">Save</span>
         </button>
       </div>
     </div>
