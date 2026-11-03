@@ -167,32 +167,54 @@ html, body, #root {
   min-height: 260px;
 }
 
-/* Swapped / Globe Position overrides in Tablet & TV: Right (default) or Left */
+/* Swapped / Globe Position overrides in Tablet & TV: Left (default) or Right */
 .app-shell[data-device="tablet"] .app-main[data-swapped="true"],
-.app-shell[data-device="tablet"] .app-main[data-globe-pos="left"],
+.app-shell[data-device="tablet"] .app-main[data-globe-pos="right"],
 .app-shell[data-device="landscape"] .app-main[data-swapped="true"],
-.app-shell[data-device="landscape"] .app-main[data-globe-pos="left"],
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="right"],
 .app-shell[data-device="tv"] .app-main[data-swapped="true"],
-.app-shell[data-device="tv"] .app-main[data-globe-pos="left"] {
+.app-shell[data-device="tv"] .app-main[data-globe-pos="right"] {
   grid-template-columns: minmax(0, 1fr) max(360px, 40%);
 }
 .app-shell[data-device="tablet"] .app-main[data-swapped="true"] .app-globe,
-.app-shell[data-device="tablet"] .app-main[data-globe-pos="left"] .app-globe,
+.app-shell[data-device="tablet"] .app-main[data-globe-pos="right"] .app-globe,
 .app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-globe,
-.app-shell[data-device="landscape"] .app-main[data-globe-pos="left"] .app-globe,
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="right"] .app-globe,
 .app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-globe,
+.app-shell[data-device="tv"] .app-main[data-globe-pos="right"] .app-globe {
+  grid-column: 2;
+  grid-row: 1;
+}
+.app-shell[data-device="tablet"] .app-main[data-swapped="true"] .app-feed,
+.app-shell[data-device="tablet"] .app-main[data-globe-pos="right"] .app-feed,
+.app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-feed,
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="right"] .app-feed,
+.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-feed,
+.app-shell[data-device="tv"] .app-main[data-globe-pos="right"] .app-feed {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+/* Default state in Tablet & TV: globe left, feed right */
+.app-shell[data-device="tablet"] .app-main[data-swapped="false"] .app-globe,
+.app-shell[data-device="tablet"] .app-main[data-globe-pos="left"] .app-globe,
+.app-shell[data-device="tv"] .app-main[data-swapped="false"] .app-globe,
 .app-shell[data-device="tv"] .app-main[data-globe-pos="left"] .app-globe {
   grid-column: 1;
   grid-row: 1;
 }
-.app-shell[data-device="tablet"] .app-main[data-swapped="true"] .app-feed,
+.app-shell[data-device="tablet"] .app-main[data-swapped="false"] .app-feed,
 .app-shell[data-device="tablet"] .app-main[data-globe-pos="left"] .app-feed,
-.app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-feed,
-.app-shell[data-device="landscape"] .app-main[data-globe-pos="left"] .app-feed,
-.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-feed,
+.app-shell[data-device="tv"] .app-main[data-swapped="false"] .app-feed,
 .app-shell[data-device="tv"] .app-main[data-globe-pos="left"] .app-feed {
   grid-column: 2;
   grid-row: 1;
+}
+.app-shell[data-device="tablet"] .app-main[data-swapped="false"],
+.app-shell[data-device="tablet"] .app-main[data-globe-pos="left"],
+.app-shell[data-device="tv"] .app-main[data-swapped="false"],
+.app-shell[data-device="tv"] .app-main[data-globe-pos="left"] {
+  grid-template-columns: minmax(0, 1fr) max(360px, 40%);
 }
 
 /* Globe Position = TOP on Landscape / TV (Globe top 46%, Feed bottom 54%) */

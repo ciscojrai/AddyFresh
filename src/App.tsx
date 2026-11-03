@@ -234,7 +234,8 @@ export default function App() {
   }, []);
 
   // Screen Target Device Viewport Toggle ('phone' | 'tablet' | 'tv')
-  // Default is mobile ('phone') with globe top. Tablet & TV globe only available on right or left.
+  // Default: mobile ('phone') with globe top.
+  // Tablet & TV default: globe left.
   const [deviceMode, setDeviceMode] = useState<'auto' | 'phone' | 'tablet' | 'tv'>(() => {
     if (typeof window !== 'undefined') {
       const param = new URLSearchParams(window.location.search).get('mode');
@@ -247,8 +248,9 @@ export default function App() {
   const isHorizontalSplit = effectiveDeviceMode === 'tablet' || effectiveDeviceMode === 'tv';
 
   // Globe Position Toggle:
-  // Mobile default: 'top' (swappable to 'bottom' via AXIS Swap)
-  // Tablet & TV: only available on 'right' or 'left' (swappable via AXIS Swap)
+  // Mobile default: 'top' (Axis Swapped -> 'bottom')
+  // Tablet default: 'left' (Axis Swapped -> 'right')
+  // TV default: 'left' (Axis Swapped -> 'right')
   const [globePosition, setGlobePosition] = useState<'top' | 'bottom' | 'left' | 'right'>('top');
 
   const handleSelectDeviceMode = (target: 'phone' | 'tablet' | 'tv') => {
@@ -258,8 +260,8 @@ export default function App() {
       setGlobePosition('top');
       setIsSwapped(false);
     } else {
-      // Tablet and TV: globe only available on right or left (default right)
-      setGlobePosition('right');
+      // Tablet and TV default: globe left, axis swap off (not highlighted)
+      setGlobePosition('left');
       setIsSwapped(false);
     }
   };
@@ -271,10 +273,11 @@ export default function App() {
       setGlobePosition(nextPos);
       setIsSwapped(nextPos === 'bottom');
     } else {
-      // Tablet or TV: flip between right and left
+      // Tablet or TV default is left (isSwapped=false).
+      // Swapping flips to right (isSwapped=true, highlighted).
       const nextPos = globePosition === 'left' ? 'right' : 'left';
       setGlobePosition(nextPos);
-      setIsSwapped(nextPos === 'left');
+      setIsSwapped(nextPos === 'right');
     }
   };
 
@@ -788,13 +791,13 @@ export default function App() {
               zIndex: isSwapped ? 25 : 10,
             }}
           >
-            {/* Top Tactical Bar: 🌐 GOD'S EYE VIEW | SCREEN TARGET: [ ▯ Mobile ] [ ▭ Tablet ] [ 📺 TV 10' ] | [ AXIS Swap ] */}
+            {/* Top Tactical Bar: Screen Target on Right Edge + Axis Swapped immediately below */}
             <div
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="absolute top-2.5 right-3 z-30 flex flex-wrap items-center justify-end gap-1.5 pointer-events-auto max-w-[94%]"
+              className="absolute top-2.5 right-3 z-30 flex flex-col items-end gap-1.5 pointer-events-auto"
             >
-              {/* Screen Target Selector: [ ▯ Mobile ] [ ▭ Tablet ] [ 📺 TV 10' ] */}
+              {/* Line 1: Screen Target Selector aligned to the right edge */}
               <div
                 className="app-device-toggle flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg"
                 role="radiogroup"
@@ -825,7 +828,7 @@ export default function App() {
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="Tablet Split View (Globe Right or Left only)"
+                  title="Tablet Split View (Globe Left default, right on swap)"
                 >
                   <Tablet size={11} />
                   <span>Tablet</span>
@@ -840,22 +843,27 @@ export default function App() {
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="TV 10-Foot UI Mode (Globe Right or Left only)"
+                  title="TV 10-Foot UI Mode (Globe Left default, right on swap)"
                 >
                   <Tv size={11} />
                   <span>TV 10&prime;</span>
                 </button>
               </div>
 
-              {/* Axis Swap Pill Button: exact 'Axis Swap' label, no icon, no right/left/top/bottom label */}
+              {/* Line 2: Axis Swapped pill button on immediate line below, highlighted when active */}
               <button
                 type="button"
                 onClick={handleToggleAxisSwap}
-                className="px-2.5 py-1 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 text-[10px] font-semibold backdrop-blur-md shadow-lg transition-all cursor-pointer active:scale-95"
-                title="Axis Swap"
-                aria-label="Axis Swap"
+                aria-pressed={isSwapped}
+                className={`px-3 py-1 rounded-full text-[10px] font-semibold backdrop-blur-md shadow-lg transition-all cursor-pointer active:scale-95 ${
+                  isSwapped
+                    ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.4)]'
+                    : 'bg-slate-950/85 hover:bg-slate-900 border border-slate-700/80 text-slate-400 hover:text-slate-200'
+                }`}
+                title={isSwapped ? 'Axis Swapped (Active)' : 'Axis Swapped (Default: Off)'}
+                aria-label="Axis Swapped"
               >
-                <span>Axis Swap</span>
+                <span>Axis Swapped</span>
               </button>
             </div>
             {/* MapLibre Map instance for map pins and markers */}

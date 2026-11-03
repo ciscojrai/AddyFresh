@@ -1812,7 +1812,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         }}
       />
 
-      {/* TOP-LEFT: GOD'S EYE VIEW Tactical Telemetry Header */}
+      {/* TOP-LEFT: GOD'S EYE VIEW Header */}
       <div className="absolute top-2.5 left-3 z-20 pointer-events-none flex flex-col gap-0.5 max-w-[56%]">
         <div className="flex items-center gap-1.5">
           <span className="w-4 h-4 rounded-full bg-cyan-500/20 border border-cyan-400/70 flex items-center justify-center text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.45)]">
@@ -1822,14 +1822,11 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             GOD&apos;S EYE VIEW
           </span>
         </div>
-        <div className="font-mono text-[8.5px] tracking-[0.12em] text-cyan-400/80 truncate">
-          {isStreetLevel
-            ? 'LIVE · GOOGLE 3D PHOTOREALISTIC · STREET TELEMETRY'
-            : 'CESIUM ION · ORBITAL SATELLITE BATHYMETRY'}
-        </div>
-        <div className="font-mono text-[8.5px] tracking-[0.08em] text-slate-300/90 truncate">
-          {activeSectorName}
-        </div>
+        {selectedEvent && (
+          <div className="font-mono text-[8.5px] tracking-[0.08em] text-slate-300/90 truncate">
+            {activeSectorName}
+          </div>
+        )}
       </div>
 
       {/* Compact Emergency Alert ID Card Popup (with 20-Day Post-Expiry Awareness) */}
@@ -2143,20 +2140,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </button>
       </div>
 
-      {/* BOTTOM-LEFT: Tactical MGRS & DMS Coordinate + Altitude Readout + Cesium Ion / Google Maps Badge */}
-      <div className="absolute bottom-2.5 left-3 z-20 pointer-events-none font-mono text-[8.5px] leading-tight tracking-wider text-cyan-300/85 bg-slate-950/65 px-2 py-1 rounded border border-cyan-500/25 backdrop-blur-sm">
-        <div>
-          MGRS: {formatTacticalMGRS(telemetry.lat, telemetry.lng)} · ALT: {formatAltitude(altMeters)} · GSD: {gsdMeters}M
-        </div>
-        <div className="text-slate-300/90 flex items-center gap-2">
-          <span>
-            {formatDMS(telemetry.lat, telemetry.lng)} · Z:{telemetry.zoom.toFixed(1)} P:{Math.round(telemetry.pitch)}°
-          </span>
-          <span className="text-[7.5px] text-cyan-400/75 font-semibold">
-            {engineMode === 'cesium' && cesiumReady ? 'CESIUM ion · Google Maps 3D' : 'HYBRID 3D GLOBE'}
-          </span>
-        </div>
-      </div>
+      {/* (Bottom-left NASA MGRS/ALT readout removed per user instruction) */}
 
       {/* TV 10' BOTTOM D-PAD & MOUSE NAVIGATION BAR */}
       <div
