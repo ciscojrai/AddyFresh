@@ -79,11 +79,12 @@ html, body, #root {
 
 
 /* ------------------------------------------------------------------
-   LANDSCAPE & ANDROID TV 16:9 SPLIT LAYOUT (added 2026-11-02)
-   Applies automatically at >= 768px (default 'landscape' mode) or when
-   toggled via the AI Studio-style [ Phone | Landscape | TV 10' ] pill.
-   Clicking 'Phone' restores the exact 390×844 portrait frame even on MacBook.
+   TABLET & ANDROID TV 16:9 SPLIT LAYOUT
+   - Default is Mobile ('phone') with globe top (390×844 frame).
+   - Tablet ('tablet') and TV ('tv') render full-bleed 16:9 split.
+   - Globe is only available on Right or Left in Tablet & TV.
    ------------------------------------------------------------------ */
+.app-shell[data-device="tablet"],
 .app-shell[data-device="landscape"],
 .app-shell[data-device="tv"] {
   position: relative;
@@ -95,6 +96,7 @@ html, body, #root {
   overflow: hidden;
 }
 
+.app-shell[data-device="tablet"] .app-main,
 .app-shell[data-device="landscape"] .app-main,
 .app-shell[data-device="tv"] .app-main {
   flex: 1 1 0;
@@ -110,17 +112,20 @@ html, body, #root {
   grid-template-rows: minmax(0, 1fr);
 }
 
+.app-shell[data-device="tablet"] .app-statusbar,
 .app-shell[data-device="landscape"] .app-statusbar,
 .app-shell[data-device="tv"] .app-statusbar {
   display: none;
 }
 
 /* middle container dissolves so feed + globe become grid items of .app-main */
+.app-shell[data-device="tablet"] .app-middle,
 .app-shell[data-device="landscape"] .app-middle,
 .app-shell[data-device="tv"] .app-middle {
   display: contents;
 }
 
+.app-shell[data-device="tablet"] .app-feed,
 .app-shell[data-device="landscape"] .app-feed,
 .app-shell[data-device="tv"] .app-feed {
   grid-column: 1;
@@ -134,6 +139,7 @@ html, body, #root {
   z-index: 25 !important;
 }
 
+.app-shell[data-device="tablet"] .app-globe,
 .app-shell[data-device="landscape"] .app-globe,
 .app-shell[data-device="tv"] .app-globe {
   grid-column: 2;
@@ -147,6 +153,8 @@ html, body, #root {
 }
 
 /* Street View and Event Detail panels slide up inside .app-feed (the panel column) */
+.app-shell[data-device="tablet"] .app-streetview,
+.app-shell[data-device="tablet"] .app-eventsheet,
 .app-shell[data-device="landscape"] .app-streetview,
 .app-shell[data-device="landscape"] .app-eventsheet,
 .app-shell[data-device="tv"] .app-streetview,
@@ -159,21 +167,29 @@ html, body, #root {
   min-height: 260px;
 }
 
-/* Swapped / Globe Position overrides (Left | Right | Top | Bottom) */
+/* Swapped / Globe Position overrides in Tablet & TV: Right (default) or Left */
+.app-shell[data-device="tablet"] .app-main[data-swapped="true"],
+.app-shell[data-device="tablet"] .app-main[data-globe-pos="left"],
 .app-shell[data-device="landscape"] .app-main[data-swapped="true"],
-.app-shell[data-device="landscape"] .app-main[data-globe-pos="left"] {
+.app-shell[data-device="landscape"] .app-main[data-globe-pos="left"],
+.app-shell[data-device="tv"] .app-main[data-swapped="true"],
+.app-shell[data-device="tv"] .app-main[data-globe-pos="left"] {
   grid-template-columns: minmax(0, 1fr) max(360px, 40%);
 }
+.app-shell[data-device="tablet"] .app-main[data-swapped="true"] .app-globe,
+.app-shell[data-device="tablet"] .app-main[data-globe-pos="left"] .app-globe,
 .app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-globe,
-.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-globe,
 .app-shell[data-device="landscape"] .app-main[data-globe-pos="left"] .app-globe,
+.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-globe,
 .app-shell[data-device="tv"] .app-main[data-globe-pos="left"] .app-globe {
   grid-column: 1;
   grid-row: 1;
 }
+.app-shell[data-device="tablet"] .app-main[data-swapped="true"] .app-feed,
+.app-shell[data-device="tablet"] .app-main[data-globe-pos="left"] .app-feed,
 .app-shell[data-device="landscape"] .app-main[data-swapped="true"] .app-feed,
-.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-feed,
 .app-shell[data-device="landscape"] .app-main[data-globe-pos="left"] .app-feed,
+.app-shell[data-device="tv"] .app-main[data-swapped="true"] .app-feed,
 .app-shell[data-device="tv"] .app-main[data-globe-pos="left"] .app-feed {
   grid-column: 2;
   grid-row: 1;

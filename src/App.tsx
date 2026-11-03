@@ -23,7 +23,7 @@ import { addEventPinsToMap } from './mapPins.js';
 import { flyCameraToCoordinate } from './cameraFlyer.js';
 import { initMapLibreWorker } from './maplibreWorker.ts';
 import { GoogleMap3DView } from './components/GoogleMap3DView';
-import { ChevronUp, Smartphone, Monitor, Tv, Globe } from 'lucide-react';
+import { ChevronUp, Smartphone, Tablet, Tv, Globe, ArrowLeftRight, ArrowUpDown } from 'lucide-react';
 import { useHaptic } from './hooks/useHaptic';
 import { speakWithAddyVoice } from './utils/metaVoice';
 
@@ -233,30 +233,48 @@ export default function App() {
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
-  // AI Studio-style Device Viewport Toggle ('auto' | 'phone' | 'landscape' | 'tv')
-  const [deviceMode, setDeviceMode] = useState<'auto' | 'phone' | 'landscape' | 'tv'>(() => {
+  // Screen Target Device Viewport Toggle ('phone' | 'tablet' | 'tv')
+  // Default is mobile ('phone') with globe top. Tablet & TV globe only available on right or left.
+  const [deviceMode, setDeviceMode] = useState<'auto' | 'phone' | 'tablet' | 'tv'>(() => {
     if (typeof window !== 'undefined') {
       const param = new URLSearchParams(window.location.search).get('mode');
-      if (param === 'phone' || param === 'landscape' || param === 'tv') return param;
+      if (param === 'phone' || param === 'tablet' || param === 'tv') return param;
     }
-    return 'auto';
+    return 'phone';
   });
-  const effectiveDeviceMode: 'phone' | 'landscape' | 'tv' =
-    deviceMode === 'auto' ? (isLandscapeWide ? 'landscape' : 'phone') : deviceMode;
-  const isHorizontalSplit = effectiveDeviceMode === 'landscape' || effectiveDeviceMode === 'tv';
+  const effectiveDeviceMode: 'phone' | 'tablet' | 'tv' =
+    deviceMode === 'auto' ? 'phone' : deviceMode;
+  const isHorizontalSplit = effectiveDeviceMode === 'tablet' || effectiveDeviceMode === 'tv';
 
-  // Globe Position Toggle ('top' | 'bottom' | 'left' | 'right')
-  const [globePosition, setGlobePosition] = useState<'top' | 'bottom' | 'left' | 'right'>(() =>
-    typeof window !== 'undefined' && window.matchMedia(LANDSCAPE_QUERY).matches ? 'right' : 'top'
-  );
+  // Globe Position Toggle:
+  // Mobile default: 'top' (swappable to 'bottom' via AXIS Swap)
+  // Tablet & TV: only available on 'right' or 'left' (swappable via AXIS Swap)
+  const [globePosition, setGlobePosition] = useState<'top' | 'bottom' | 'left' | 'right'>('top');
 
-  const handleSelectGlobePosition = (pos: 'top' | 'bottom' | 'left' | 'right') => {
+  const handleSelectDeviceMode = (target: 'phone' | 'tablet' | 'tv') => {
     triggerPanelToggle();
-    setGlobePosition(pos);
-    if (pos === 'bottom' || pos === 'left') {
-      setIsSwapped(true);
-    } else {
+    setDeviceMode(target);
+    if (target === 'phone') {
+      setGlobePosition('top');
       setIsSwapped(false);
+    } else {
+      // Tablet and TV: globe only available on right or left (default right)
+      setGlobePosition('right');
+      setIsSwapped(false);
+    }
+  };
+
+  const handleToggleAxisSwap = () => {
+    triggerPanelToggle();
+    if (effectiveDeviceMode === 'phone') {
+      const nextPos = globePosition === 'top' ? 'bottom' : 'top';
+      setGlobePosition(nextPos);
+      setIsSwapped(nextPos === 'bottom');
+    } else {
+      // Tablet or TV: flip between right and left
+      const nextPos = globePosition === 'left' ? 'right' : 'left';
+      setGlobePosition(nextPos);
+      setIsSwapped(nextPos === 'left');
     }
   };
 
@@ -770,95 +788,80 @@ export default function App() {
               zIndex: isSwapped ? 25 : 10,
             }}
           >
-            {/* Top-Right Pill Controls: Globe Position Toggle (Top | Bottom | Left | Right) + Device Viewport Toggle (Phone | Landscape | TV 10') */}
+            {/* Top Tactical Bar: 🌐 GOD'S EYE VIEW | SCREEN TARGET: [ ▯ Mobile ] [ ▭ Tablet ] [ 📺 TV 10' ] | [ AXIS Swap ] */}
             <div
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="absolute top-2.5 right-3 z-30 flex flex-wrap items-center justify-end gap-1.5 pointer-events-auto max-w-[92%]"
+              className="absolute top-2.5 right-3 z-30 flex flex-wrap items-center justify-end gap-1.5 pointer-events-auto max-w-[94%]"
             >
-              {/* Globe Position Pill Toggle */}
-              <div
-                className="app-globe-pos-toggle flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg"
-                role="group"
-                aria-label="Globe Position Toggle"
-              >
-                <span className="flex items-center gap-1 pl-2 pr-1 text-[9.5px] font-semibold text-cyan-300/90">
-                  <Globe size={10} />
-                </span>
-                {(['top', 'bottom', 'left', 'right'] as const).map((pos) => (
-                  <button
-                    key={pos}
-                    type="button"
-                    onClick={() => handleSelectGlobePosition(pos)}
-                    className={`px-1.5 py-1 rounded-full text-[9.5px] font-semibold capitalize transition-all cursor-pointer ${
-                      globePosition === pos
-                        ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
-                        : 'text-slate-400 hover:text-slate-200 border border-transparent'
-                    }`}
-                    title={`Dock Globe ${pos.charAt(0).toUpperCase() + pos.slice(1)}`}
-                  >
-                    {pos}
-                  </button>
-                ))}
-              </div>
-
-              {/* Size Change Viewport Toggle: Tall | Wide | TV 10' */}
+              {/* Screen Target Selector: [ ▯ Mobile ] [ ▭ Tablet ] [ 📺 TV 10' ] */}
               <div
                 className="app-device-toggle flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg"
                 role="radiogroup"
-                aria-label="Size Change Viewport Toggle"
+                aria-label="Screen Target Selector"
               >
                 <button
                   type="button"
                   role="radio"
                   aria-checked={effectiveDeviceMode === 'phone'}
-                  onClick={() => {
-                    setDeviceMode('phone');
-                    if (globePosition === 'left' || globePosition === 'right') {
-                      handleSelectGlobePosition('top');
-                    }
-                  }}
+                  onClick={() => handleSelectDeviceMode('phone')}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
                     effectiveDeviceMode === 'phone'
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="Tall Portrait View"
+                  title="Mobile Portrait View (Globe Top)"
                 >
                   <Smartphone size={11} />
-                  <span>Tall</span>
+                  <span>Mobile</span>
                 </button>
                 <button
                   type="button"
                   role="radio"
-                  aria-checked={effectiveDeviceMode === 'landscape'}
-                  onClick={() => setDeviceMode('landscape')}
+                  aria-checked={effectiveDeviceMode === 'tablet'}
+                  onClick={() => handleSelectDeviceMode('tablet')}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
-                    effectiveDeviceMode === 'landscape'
+                    effectiveDeviceMode === 'tablet'
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="Wide Split View"
+                  title="Tablet Split View (Globe Right or Left only)"
                 >
-                  <Monitor size={11} />
-                  <span>Wide</span>
+                  <Tablet size={11} />
+                  <span>Tablet</span>
                 </button>
                 <button
                   type="button"
                   role="radio"
                   aria-checked={effectiveDeviceMode === 'tv'}
-                  onClick={() => setDeviceMode('tv')}
+                  onClick={() => handleSelectDeviceMode('tv')}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
                     effectiveDeviceMode === 'tv'
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="TV 10-Foot UI Mode"
+                  title="TV 10-Foot UI Mode (Globe Right or Left only)"
                 >
                   <Tv size={11} />
                   <span>TV 10&prime;</span>
                 </button>
               </div>
+
+              {/* AXIS Swap Pill Button */}
+              <button
+                type="button"
+                onClick={handleToggleAxisSwap}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 text-[10px] font-semibold backdrop-blur-md shadow-lg transition-all cursor-pointer active:scale-95"
+                title={
+                  effectiveDeviceMode === 'phone'
+                    ? `AXIS Swap (Current: Globe ${globePosition.toUpperCase()} · Click to swap Top/Bottom)`
+                    : `AXIS Swap (Current: Globe ${globePosition.toUpperCase()} · Click to swap Right/Left)`
+                }
+              >
+                {effectiveDeviceMode === 'phone' ? <ArrowUpDown size={11} /> : <ArrowLeftRight size={11} />}
+                <span>AXIS Swap</span>
+                <span className="font-mono text-[9px] uppercase text-slate-400 pl-0.5">[{globePosition}]</span>
+              </button>
             </div>
             {/* MapLibre Map instance for map pins and markers */}
             <div
