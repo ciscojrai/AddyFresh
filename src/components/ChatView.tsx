@@ -103,12 +103,28 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
 
+  // Silence after speech before the turn is sent. Without this the transcript was sent
+  // on mic release, which cut people off the moment they paused.
+  const SILENCE_END_MS = 1800;
+  const silenceEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearSilenceEnd = () => {
+    if (silenceEndRef.current) {
+      clearTimeout(silenceEndRef.current);
+      silenceEndRef.current = null;
+    }
+  };
+
   const startListening = async () => {
     if (!voiceSupported || captureRef.current || listening || transcribing) return;
     setListening(true);
     try {
       const handle = await startMetaVoiceCapture((interim) => {
         if (interim) setInputVal(interim);
+        // Every recognised word restarts the pause timer, so thinking out loud is fine.
+        clearSilenceEnd();
+        silenceEndRef.current = setTimeout(() => {
+          void stopListeningRef.current?.();
+        }, SILENCE_END_MS);
       });
       captureRef.current = handle;
     } catch {
@@ -118,6 +134,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const stopListening = async () => {
+    clearSilenceEnd();
     const handle = captureRef.current;
     if (!handle) {
       setListening(false);
@@ -142,8 +159,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const stopListeningRef = useRef<(() => Promise<void>) | null>(null);
+
   useEffect(
     () => () => {
+      clearSilenceEnd();
       try {
         captureRef.current?.cancel();
       } catch {
@@ -260,29 +280,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   data-listening={listening || transcribing ? 'true' : 'false'}
                   title={
                     listening
-                      ? 'Listening (Meta Voice)... Release to send'
+                      ? 'Listening… tap again to finish'
                       : transcribing
                       ? 'Transcribing with Meta muse-voice-transcribe-1.0...'
-                      : 'Hold to speak (Meta Voice)'
+                      : 'Tap to speak (Meta Voice)'
                   }
-                  aria-label="Hold to speak (Meta Voice)"
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    startListening();
+                  aria-label="Tap to speak (Meta Voice)"
+                  onClick={() => {
+                    // Tap to start, tap to finish. The turn also ends on its own after a
+                    // pause, so a tap is only needed to begin or to cut it short.
+                    if (captureRef.current || listening) void stopListening();
+                    else void startListening();
                   }}
-                  onPointerUp={stopListening}
-                  onPointerLeave={stopListening}
-                  onPointerCancel={stopListening}
                   onKeyDown={(e) => {
-                    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) {
+                    if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      startListening();
+                      if (captureRef.current || listening) void stopListening();
+                      else void startListening();
                     }
                   }}
-                  onKeyUp={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') stopListening();
-                  }}
-                  onBlur={stopListening}
                   className={`relative w-9 h-9 rounded-full flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer touch-none ${
                     listening
                       ? 'text-white bg-blue-500/30 ring-2 ring-blue-400'

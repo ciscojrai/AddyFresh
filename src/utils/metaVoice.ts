@@ -219,8 +219,53 @@ export async function startMetaVoiceCapture(
 }
 
 let activeAudio: HTMLAudioElement | null = null;
+let playbackToken = 0;
+
+/** Which engine actually spoke, so the UI can say so instead of guessing. */
+export type AddyVoiceSource = 'bridge' | 'server' | 'browser';
+
+export type AddyVoiceReport = {
+  source: AddyVoiceSource;
+  /** Human label for the UI, e.g. "Bella (bridge)". */
+  label: string;
+  /** Why the Bella attempts failed, when the browser voice had to take over. */
+  reason?: string;
+  at: number;
+};
+
+let lastReport: AddyVoiceReport | null = null;
+let reportListener: ((r: AddyVoiceReport) => void) | null = null;
+
+const LABELS: Record<AddyVoiceSource, string> = {
+  bridge: 'Bella (bridge)',
+  server: 'Bella (server)',
+  browser: 'Browser voice',
+};
+
+/** The most recent report, or null before anything has spoken. */
+export function lastAddyVoiceReport(): AddyVoiceReport | null {
+  return lastReport;
+}
+
+/** Subscribe to every report. Returns an unsubscribe function. */
+export function onAddyVoiceReport(fn: ((r: AddyVoiceReport) => void) | null) {
+  reportListener = fn;
+  return () => {
+    if (reportListener === fn) reportListener = null;
+  };
+}
+
+function report(source: AddyVoiceSource, reason?: string): AddyVoiceReport {
+  const next: AddyVoiceReport = { source, label: LABELS[source], reason, at: Date.now() };
+  lastReport = next;
+  try {
+    reportListener?.(next);
+  } catch {}
+  return next;
+}
 
 export function stopAddyVoicePlayback() {
+  playbackToken++;
   try {
     if (activeAudio) {
       activeAudio.pause();
@@ -235,34 +280,138 @@ export function stopAddyVoicePlayback() {
   } catch {}
 }
 
-export function speakWithAddyVoice(text: string, voice = 'af_heart') {
+/** The bridge URL compiled into the bundle, if any. */
+export function configuredBridgeUrl(): string {
+  const env = (import.meta as any).env || {};
+  return String(env.VITE_VOICE_BRIDGE_URL || '').trim().replace(/\/+$/, '');
+}
+
+/** A failure the caller can show, instead of a silent null. */
+type Attempt = { ok: true; url: string } | { ok: false; reason: string };
+
+async function fetchWav(url: string, init: RequestInit, what: string): Promise<Attempt> {
+  try {
+    const res = await fetch(url, init);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      let coded = '';
+      try {
+        coded = JSON.parse(detail)?.error || '';
+      } catch {}
+      return { ok: false, reason: `${what} answered HTTP ${res.status}${coded ? ` (${coded})` : ''}` };
+    }
+    const body = await res.arrayBuffer();
+    if (body.byteLength < 44) return { ok: false, reason: `${what} returned an empty clip` };
+    return { ok: true, url: URL.createObjectURL(new Blob([body], { type: 'audio/wav' })) };
+  } catch (err: any) {
+    const message = String(err?.message || err);
+    // A CORS or connection failure surfaces as a bare TypeError; name the common cause.
+    const hint = /Failed to fetch|NetworkError|Load failed/i.test(message)
+      ? ` - is the voice bridge running and allowed to accept this origin?`
+      : '';
+    return { ok: false, reason: `${what} unreachable: ${message}${hint}` };
+  }
+}
+
+/**
+ * Gets Bella audio, in order: the bridge compiled into the build, then the same-origin
+ * Netlify function. Both are real Kokoro. Only if both fail does the caller hear the
+ * browser voice, and then it reports why.
+ */
+async function fetchBellaAudio(clean: string, voice: string, signal: AbortSignal): Promise<Attempt & { source?: AddyVoiceSource }> {
+  const reasons: string[] = [];
+  const text = clean.slice(0, 900);
+
+  const bridge = configuredBridgeUrl();
+  if (bridge) {
+    const url = `${bridge}/tts?text=${encodeURIComponent(text.slice(0, 500))}&voice=${encodeURIComponent(voice)}`;
+    const got = await fetchWav(url, { method: 'GET', signal }, `voice bridge ${bridge}`);
+    if (got.ok) return { ...got, source: 'bridge' };
+    reasons.push(got.reason);
+  } else {
+    reasons.push('VITE_VOICE_BRIDGE_URL is not set');
+  }
+
+  const got = await fetchWav(
+    '/api/voice/tts',
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice }), signal },
+    '/api/voice/tts',
+  );
+  if (got.ok) return { ...got, source: 'server' };
+  reasons.push(got.reason);
+
+  return { ok: false, reason: reasons.join('; ') };
+}
+
+/** True when either Bella path is reachable right now. Never throws. */
+export async function addyVoiceAvailable(): Promise<{ ok: boolean; detail: string }> {
+  if (typeof window === 'undefined') return { ok: false, detail: 'no window' };
+  const bridge = configuredBridgeUrl();
+  if (bridge) {
+    try {
+      const res = await fetch(`${bridge}/health`);
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { ok: Boolean(data?.ok), detail: `bridge ${bridge}` };
+      }
+      return { ok: false, detail: `bridge answered HTTP ${res.status}` };
+    } catch (err: any) {
+      return { ok: false, detail: `bridge unreachable: ${err?.message || err}` };
+    }
+  }
+  try {
+    const res = await fetch('/api/voice/health');
+    const data = await res.json().catch(() => ({}));
+    return { ok: Boolean(data?.ok), detail: '/api/voice/health' };
+  } catch (err: any) {
+    return { ok: false, detail: `server unreachable: ${err?.message || err}` };
+  }
+}
+
+export function speakWithAddyVoice(text: string, voice = 'af_bella') {
   const clean = text.replace(/[*#_`~]/g, '').trim();
   if (!clean || typeof window === 'undefined') return;
   stopAddyVoicePlayback();
+  const token = playbackToken;
 
-  const bridgeBase = (import.meta as any).env?.VITE_VOICE_BRIDGE_URL || '';
-  if (bridgeBase) {
-    try {
-      const url = `${String(bridgeBase).replace(/\/+$/, '')}/tts?text=${encodeURIComponent(
-        clean.slice(0, 500)
-      )}&voice=${encodeURIComponent(voice)}`;
-      const audio = new Audio(url);
+  const ctl = new AbortController();
+  fetchBellaAudio(clean, voice, ctl.signal)
+    .then((got) => {
+      if (token !== playbackToken) {
+        if (got.ok) URL.revokeObjectURL(got.url);
+        return; // a newer answer already took the floor
+      }
+      if (!got.ok) {
+        report('browser', got.reason);
+        speakBrowserFallback(clean);
+        return;
+      }
+      const audio = new Audio(got.url);
       activeAudio = audio;
+      const release = () => {
+        URL.revokeObjectURL(got.url);
+        if (activeAudio === audio) activeAudio = null;
+      };
+      audio.onended = release;
       audio.onerror = () => {
-        activeAudio = null;
+        release();
+        report('browser', 'Bella played back as an error; using the browser voice');
         speakBrowserFallback(clean);
       };
-      audio.play().catch(() => {
-        activeAudio = null;
-        speakBrowserFallback(clean);
-      });
-      return;
-    } catch {
-      // fall through
-    }
-  }
-
-  speakBrowserFallback(clean);
+      audio.play().then(
+        () => report(got.source || 'server'),
+        (err: any) => {
+          release();
+          report('browser', `audio was blocked by the browser (${err?.message || err})`);
+          speakBrowserFallback(clean);
+        },
+      );
+    })
+    .catch((err: any) => {
+      if (token !== playbackToken) return;
+      report('browser', `voice request failed: ${err?.message || err}`);
+      speakBrowserFallback(clean);
+    });
 }
 
 function speakBrowserFallback(clean: string) {
@@ -272,6 +421,8 @@ function speakBrowserFallback(clean: string) {
       utter.rate = 1.04;
       utter.pitch = 1.0;
       window.speechSynthesis.speak(utter);
+      // Only report here when no caller already explained why Bella was skipped.
+      if (!lastReport || lastReport.source !== 'browser') report('browser', 'browser voice used');
     }
   } catch {}
 }

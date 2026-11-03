@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { haptic } from '../utils/haptics';
 import { initMapLibreWorker } from '../maplibreWorker';
+import { VoiceButton } from './VoiceButton';
+import type { SessionState } from '../voice/conversation';
 import {
   loadHazardAlerts,
   buildAlertPopupHtml,
@@ -35,6 +37,10 @@ interface GlobeViewProps {
   radarActive?: boolean;
   perspective?: CameraPerspective;
   themeMode?: ThemeMode;
+  /** Voice-session state, shown on the button in the bottom-right dock. */
+  voiceState?: SessionState;
+  voiceSecondsLeft?: number;
+  onToggleVoice?: () => void;
 }
 
 // Approximate camera altitude in meters from MapLibre zoom level
@@ -87,6 +93,9 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   onSelectEvent,
   activeMood,
   radarActive,
+  voiceState = 'closed',
+  voiceSecondsLeft = 0,
+  onToggleVoice,
 }) => {
   const starCanvasRef = useRef<HTMLCanvasElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -98,8 +107,25 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   const autoRotateRef = useRef<boolean>(true);
   const isUserInteractingRef = useRef<boolean>(false);
 
-  const cesiumToken = (import.meta as any).env?.VITE_CESIUM_ION_TOKEN || '';
-  const [engineMode, setEngineMode] = useState<'cesium' | 'maplibre'>('cesium');
+  const envMeta = (import.meta as any).env || {};
+  const cesiumToken =
+    envMeta.VITE_CESIUM_ION_TOKEN ||
+    envMeta.AGY_CESIUM_KEY ||
+    envMeta.VITE_AGY_CESIUM_KEY ||
+    envMeta.CESIUM_KEY ||
+    envMeta.VITE_CESIUM_KEY ||
+    (typeof window !== 'undefined' ? (window as any).AGY_CESIUM_KEY || (window as any).CESIUM_ION_TOKEN : '') ||
+    '';
+  if (typeof window !== 'undefined' && (window as any).Cesium && cesiumToken) {
+    try {
+      (window as any).Cesium.Ion.defaultAccessToken = cesiumToken;
+    } catch {
+      // ignore
+    }
+  }
+  const [engineMode, setEngineMode] = useState<'cesium' | 'maplibre'>(() =>
+    cesiumToken ? 'cesium' : 'maplibre'
+  );
   const [cesiumReady, setCesiumReady] = useState<boolean>(false);
 
   const [autoRotate, setAutoRotate] = useState(true);
@@ -458,14 +484,14 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           maxzoom: 19,
           attribution: 'Esri, Maxar, Earthstar Geographics',
         },
-        'carto-hybrid-labels': {
+        'esri-reference-labels': {
           type: 'raster',
           tiles: [
-            'https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
-            'https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
+            'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
           ],
           tileSize: 256,
           maxzoom: 19,
+          attribution: 'Esri',
         },
       },
       layers: [
@@ -492,7 +518,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         {
           id: 'hybrid-street-labels',
           type: 'raster',
-          source: 'carto-hybrid-labels',
+          source: 'esri-reference-labels',
           minzoom: 2,
           maxzoom: 20,
           paint: {
@@ -1068,6 +1094,26 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     };
   }, []);
 
+  // Spoken globe commands: "zoom in" / "left" arrive as window events from the voice
+  // layer and reuse the exact handlers the on-screen controls call, so camera behaviour
+  // stays identical whether it was a tap, a remote, or a voice command.
+  useEffect(() => {
+    const onVoiceZoom = (e: Event) => {
+      const dir = (e as CustomEvent<{ dir?: 'in' | 'out' }>).detail?.dir;
+      if (dir === 'in' || dir === 'out') handleTvDpadZoom(dir);
+    };
+    const onVoicePan = (e: Event) => {
+      const dir = (e as CustomEvent<{ dir?: 'left' | 'right' }>).detail?.dir;
+      if (dir === 'left' || dir === 'right') handleTvDpadPan(dir);
+    };
+    window.addEventListener('freshaddy:voice-zoom', onVoiceZoom);
+    window.addEventListener('freshaddy:voice-pan', onVoicePan);
+    return () => {
+      window.removeEventListener('freshaddy:voice-zoom', onVoiceZoom);
+      window.removeEventListener('freshaddy:voice-pan', onVoicePan);
+    };
+  }, [handleTvDpadZoom, handleTvDpadPan]);
+
   // Rain Radar layer sync: RainViewer live radar tiles for both MapLibre and Cesium
   useEffect(() => {
     const op = Math.min(0.9, Math.max(0.15, radarOpacity / 100));
@@ -1426,6 +1472,16 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         onClick={(e) => e.stopPropagation()}
         className="absolute bottom-2.5 right-3 z-20 flex flex-wrap items-center justify-end gap-1.5 pointer-events-auto"
       >
+        {/* Voice: starts or ends the Pagos conversation session */}
+        {onToggleVoice && (
+          <VoiceButton
+            variant="globe"
+            state={voiceState}
+            secondsLeft={voiceSecondsLeft}
+            onToggle={onToggleVoice}
+          />
+        )}
+
         {/* Rain Radar Pill: CloudRain toggle + opacity slider (10..90%) + '+' */}
         <div
           className={`flex items-center gap-1 rounded-full py-0.5 pl-1 pr-2 border backdrop-blur-md transition-all ${

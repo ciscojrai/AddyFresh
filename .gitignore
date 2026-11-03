@@ -16,3 +16,7 @@ _backup_src_*/
 *.pem
 *.key
 package-lock.json
+*.backup-*
+.voice-test/
+*.textClipping
+

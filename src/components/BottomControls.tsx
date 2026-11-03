@@ -1,4 +1,6 @@
 import { ActiveNav } from '../types';
+import { VoiceButton } from './VoiceButton';
+import type { SessionState } from '../voice/conversation';
 import {
   Check,
   Play,
@@ -14,6 +16,16 @@ interface BottomControlsProps {
   onSearchChange: (q: string) => void;
   onSubmitSearch: (q: string) => void;
   likedCount: number;
+  /** Voice-session state, shown on the chip beside the chat icon. */
+  voiceState?: SessionState;
+  /** Seconds left to reply; shown on the chip during the countdown. */
+  voiceSecondsLeft?: number;
+  /** Opens or closes the voice conversation. */
+  onToggleVoice?: () => void;
+  /** Which voice engine spoke last, e.g. "Bella (bridge)". */
+  voiceEngineLabel?: string | null;
+  /** Why the browser voice was used, when it was. */
+  voiceEngineReason?: string | null;
 }
 
 export const BottomControls: React.FC<BottomControlsProps> = ({
@@ -23,6 +35,11 @@ export const BottomControls: React.FC<BottomControlsProps> = ({
   onSearchChange,
   onSubmitSearch,
   likedCount,
+  voiceState = 'closed',
+  voiceEngineLabel = null,
+  voiceEngineReason = null,
+  voiceSecondsLeft = 0,
+  onToggleVoice,
 }) => {
   return (
     <footer aria-label="Application Controls" className="w-full bg-[#05070e] border-t border-slate-900 px-4 py-2 flex flex-col gap-2 shrink-0 select-none z-30">
@@ -80,6 +97,16 @@ export const BottomControls: React.FC<BottomControlsProps> = ({
           <MessageSquare size={20} className="stroke-[2.2]" />
         </button>
 
+        {/* Voice: spoken conversation, immediately right of the chat icon */}
+        {onToggleVoice && (
+          <VoiceButton
+            variant="nav"
+            state={voiceState}
+            secondsLeft={voiceSecondsLeft}
+            onToggle={onToggleVoice}
+          />
+        )}
+
         {/* Heart / Liked */}
         <button
           onClick={() => onNavChange('likes')}
@@ -98,6 +125,16 @@ export const BottomControls: React.FC<BottomControlsProps> = ({
           )}
         </button>
       </nav>
+      {voiceEngineLabel && (
+        <p
+          className={`voice-engine-caption ${voiceState !== 'closed' ? 'voice-engine-caption--live' : ''}`}
+          title={voiceEngineReason || undefined}
+          aria-live="polite"
+        >
+          Voice: {voiceEngineLabel}
+          {voiceEngineReason ? ` — ${voiceEngineReason}` : ''}
+        </p>
+      )}
     </footer>
   );
 };

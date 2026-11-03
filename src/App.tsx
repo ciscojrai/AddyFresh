@@ -23,9 +23,10 @@ import { addEventPinsToMap } from './mapPins.js';
 import { flyCameraToCoordinate } from './cameraFlyer.js';
 import { initMapLibreWorker } from './maplibreWorker.ts';
 import { GoogleMap3DView } from './components/GoogleMap3DView';
-import { ChevronUp, Smartphone, Tablet, Tv, Globe, ArrowLeftRight, ArrowUpDown } from 'lucide-react';
+import { ChevronUp, Smartphone, Tablet, Tv, Globe, ArrowLeftRight, ArrowUpDown, ArrowDown, ArrowUp, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useHaptic } from './hooks/useHaptic';
 import { speakWithAddyVoice } from './utils/metaVoice';
+import { useVoiceSession } from './hooks/useVoiceSession';
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
   {
@@ -201,6 +202,60 @@ function generateAiResponse(query: string, events: EventItem[]): string {
   return `I searched 149k live experiences for "${query}".\n\nFound curated options across live music, culture, and interactive gatherings. I've logged this to your Recents in the chat sidebar so you can revisit updates or inspect globe pins at any time.`;
 }
 
+const TallArrowIcon = ({ className = 'w-[11px] h-[11px]' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.4"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M12 3v18" />
+    <path d="m7.5 7.5 4.5-4.5 4.5 4.5" />
+    <path d="m7.5 16.5 4.5 4.5 4.5-4.5" />
+  </svg>
+);
+
+const WideArrowIcon = ({ className = 'w-[11px] h-[11px]' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.4"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M3 12h18" />
+    <path d="m7.5 7.5-4.5 4.5 4.5 4.5" />
+    <path d="m16.5 7.5 4.5 4.5-4.5 4.5" />
+  </svg>
+);
+
+const TvArrowIcon = ({ className = 'w-[11px] h-[11px]' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.4"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M4 4l16 16" />
+    <path d="M4 20L20 4" />
+    <path d="M4 9V4h5" />
+    <path d="M15 4h5v5" />
+    <path d="M4 15v5h5" />
+    <path d="M15 20h5v-5" />
+  </svg>
+);
+
 export default function App() {
   const { triggerPanelToggle, triggerGlobePin, triggerNav } = useHaptic();
 
@@ -280,19 +335,27 @@ export default function App() {
     }
   };
 
+  // Transient active highlight state for 3D Globe swap button (clears as soon as swap triggers/completes)
+  const [isGlobeSwapActive, setIsGlobeSwapActive] = useState(false);
+
   const handleToggleAxisSwap = () => {
     triggerPanelToggle();
+    setIsGlobeSwapActive(true);
     if (effectiveDeviceMode === 'phone') {
       const nextPos = globePosition === 'top' ? 'bottom' : 'top';
       setGlobePosition(nextPos);
       setIsSwapped(nextPos === 'bottom');
     } else {
       // Tablet or TV default is left (isSwapped=false).
-      // Swapping flips to right (isSwapped=true, highlighted).
+      // Swapping flips to right (isSwapped=true).
       const nextPos = globePosition === 'left' ? 'right' : 'left';
       setGlobePosition(nextPos);
       setIsSwapped(nextPos === 'right');
     }
+    // Immediately unhighlight upon the globe switching
+    setTimeout(() => {
+      setIsGlobeSwapActive(false);
+    }, 180);
   };
 
   // Track heights for smooth translation swap without collapsing or shrinking
@@ -350,20 +413,20 @@ export default function App() {
         style: {
           version: 8,
           sources: {
-            'carto-dark': {
+            'esri-dark': {
               type: 'raster',
               tiles: [
-                'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+                'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
               ],
               tileSize: 256,
-              attribution: '&copy; OpenStreetMap',
+              attribution: 'Esri, HERE, Garmin',
             },
           },
           layers: [
             {
-              id: 'carto-dark',
+              id: 'esri-dark',
               type: 'raster',
-              source: 'carto-dark',
+              source: 'esri-dark',
             },
           ],
         },
@@ -608,7 +671,14 @@ export default function App() {
   };
 
   // Chat conversation actions
-  const handleSendMessageInChat = (conversationId: string, messageText: string) => {
+  // Only a voice conversation speaks. Typed searches stay silent. This holds the live
+  // session object so the chat handler can ask it directly, not a render-time snapshot.
+  const voiceSessionRef = useRef<{ isOpen: () => boolean } | null>(null);
+
+  const handleSendMessageInChat = async (
+    conversationId: string,
+    messageText: string
+  ): Promise<{ reply: Promise<string>; id: string; placeholder: string }> => {
     const stamp = Date.now();
     const userMsg = {
       id: `msg-${stamp}-u`,
@@ -623,6 +693,14 @@ export default function App() {
       text: 'Muse is thinking…',
       timestamp: 'Just now',
     };
+    let lastReply = '';
+    // The request below is a promise chain, not an await, so this function would return
+    // an empty string the instant it is called. Expose the in-flight answer so callers
+    // that need the real reply (the voice session) can wait for it.
+    let resolveReply: (text: string) => void = () => {};
+    const replyReady = new Promise<string>((resolve) => {
+      resolveReply = resolve;
+    });
     const priorMessages = conversations.find((c) => c.id === conversationId)?.messages ?? [];
     const history = priorMessages
       .slice(-6)
@@ -668,7 +746,10 @@ export default function App() {
       .then((data: { text?: string; actions?: Array<{ type: string; lat?: number; lon?: number; enabled?: boolean }> }) => {
         const replyText = data.text || 'Muse had no answer for that.';
         setAssistantText(replyText);
-        speakWithAddyVoice(replyText);
+        // Silent unless a voice session is genuinely open right now.
+        if (voiceSessionRef.current?.isOpen()) speakWithAddyVoice(replyText);
+        lastReply = replyText;
+        resolveReply(replyText);
         (data.actions || []).forEach((a) => {
           if (a.type === 'fly_to' && typeof a.lat === 'number' && typeof a.lon === 'number') {
             flyCameraToCoordinate({ lat: a.lat, lng: a.lon, target: 'globe' });
@@ -681,9 +762,36 @@ export default function App() {
       })
       .catch((err) => {
         console.warn('Muse chat unavailable, using local search:', err);
-        setAssistantText(`${generateAiResponse(messageText, events)}\n\nMuse offline - showing local results.`);
+        const local = `${generateAiResponse(messageText, events)}\n\nMuse offline - showing local results.`;
+        setAssistantText(local);
+        lastReply = local;
+        resolveReply(local);
       });
+    // Resolves once the reply text exists, for a caller that needs the real answer.
+    const spokeReply = lastReply ? Promise.resolve(lastReply) : replyReady;
+    return { reply: spokeReply, id: assistantId, placeholder: 'Muse is thinking…' };
   };
+
+  // Voice conversation (Pagos): the globe button and the nav chip both drive this one
+  // session. Questions reuse the chat handler so the panel, the globe actions, and
+  // Saved all behave exactly as they do for typed messages.
+  const voice = useVoiceSession({
+    ask: (text) => {
+      setActiveNav('chat');
+      // Wait for the real answer before the countdown starts, so the 30 seconds the user
+      // gets are all theirs: the clock never runs while Muse is still thinking.
+      return handleSendMessageInChat(voiceConversationRef.current, text).then((sent) => sent.reply);
+    },
+  });
+  // The chat handler reads this synchronously, so it must be set before the handler runs.
+  voiceSessionRef.current = voice;
+  // The chat conversation the voice session appends to: the open one, or the first.
+  const voiceConversationRef = useRef<string>(
+    conversations.find((c) => c.id === activeConversationId)?.id ?? conversations[0]?.id ?? ''
+  );
+  useEffect(() => {
+    if (activeConversationId) voiceConversationRef.current = activeConversationId;
+  }, [activeConversationId]);
 
   const handleNewChat = (initialQuery?: string) => {
     const convId = `conv-${Date.now()}`;
@@ -809,10 +917,10 @@ export default function App() {
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="Mobile Portrait View (Globe Top)"
+                  title="Tall View (Globe Top)"
                 >
-                  <Smartphone size={11} />
-                  <span>Mobile</span>
+                  <TallArrowIcon className="w-[11px] h-[11px]" />
+                  <span>Tall</span>
                 </button>
                 <button
                   type="button"
@@ -824,10 +932,10 @@ export default function App() {
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="Tablet Split View (Globe Left default, right on swap)"
+                  title="Wide View (Globe Left default, right on swap)"
                 >
-                  <Tablet size={11} />
-                  <span>Tablet</span>
+                  <WideArrowIcon className="w-[11px] h-[11px]" />
+                  <span>Wide</span>
                 </button>
                 <button
                   type="button"
@@ -839,27 +947,48 @@ export default function App() {
                       ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                       : 'text-slate-400 hover:text-slate-200 border border-transparent'
                   }`}
-                  title="TV 10-Foot UI Mode (Globe Left default, right on swap)"
+                  title="TV Mode (Globe Left default, right on swap)"
                 >
-                  <Tv size={11} />
-                  <span>TV 10&prime;</span>
+                  <TvArrowIcon className="w-[11px] h-[11px]" />
+                  <span>TV</span>
                 </button>
               </div>
 
-              {/* Line 2: Axis Swapped pill button on immediate line below, highlighted when active */}
+              {/* Line 2: 3D Globe position toggle matching radio bar styling above */}
               <button
                 type="button"
                 onClick={handleToggleAxisSwap}
-                aria-pressed={isSwapped}
-                className={`px-3 py-1 rounded-full text-[10px] font-semibold backdrop-blur-md shadow-lg transition-all cursor-pointer active:scale-95 ${
-                  isSwapped
-                    ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.4)]'
+                aria-pressed={isGlobeSwapActive}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold backdrop-blur-md shadow-lg transition-all cursor-pointer active:scale-95 ${
+                  isGlobeSwapActive
+                    ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.25)]'
                     : 'bg-slate-950/85 hover:bg-slate-900 border border-slate-700/80 text-slate-400 hover:text-slate-200'
                 }`}
-                title={isSwapped ? 'Axis Swapped (Active)' : 'Axis Swapped (Default: Off)'}
-                aria-label="Axis Swapped"
+                title={
+                  effectiveDeviceMode === 'phone'
+                    ? globePosition === 'top'
+                      ? '3D Globe (Top - click to move down)'
+                      : '3D Globe (Bottom - click to move up)'
+                    : globePosition === 'left'
+                      ? '3D Globe (Left - click to move right)'
+                      : '3D Globe (Right - click to move left)'
+                }
+                aria-label="3D Globe Position"
               >
-                <span>Axis Swapped</span>
+                <span>3D Globe</span>
+                {effectiveDeviceMode === 'phone' ? (
+                  globePosition === 'top' ? (
+                    <ArrowDown className="w-[11px] h-[11px]" />
+                  ) : (
+                    <ArrowUp className="w-[11px] h-[11px]" />
+                  )
+                ) : (
+                  globePosition === 'left' ? (
+                    <ArrowRight className="w-[11px] h-[11px]" />
+                  ) : (
+                    <ArrowLeft className="w-[11px] h-[11px]" />
+                  )
+                )}
               </button>
             </div>
             {/* MapLibre Map instance for map pins and markers */}
@@ -884,6 +1013,9 @@ export default function App() {
                 radarActive={false}
                 perspective={'3D'}
                 themeMode={'dark'}
+                voiceState={voice.state}
+                voiceSecondsLeft={voice.secondsLeft}
+                onToggleVoice={voice.toggle}
               />
             </div>
 
@@ -1015,6 +1147,11 @@ export default function App() {
             {/* 3. BOTTOM CONTROLS (Moves with section area so it sits below feed when swapped to top) */}
             <div className="app-controls shrink-0">
               <BottomControls
+                voiceState={voice.state}
+                voiceSecondsLeft={voice.secondsLeft}
+                onToggleVoice={voice.toggle}
+                voiceEngineLabel={voice.voiceReport?.label ?? null}
+                voiceEngineReason={voice.voiceReport?.reason ?? null}
                 activeNav={activeNav}
                 onNavChange={(nav) => {
                   triggerNav();
