@@ -19,6 +19,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/voice/tts"
+  to = "/.netlify/functions/voice-tts"
+  status = 200
+
+[[redirects]]
+  from = "/api/voice/health"
+  to = "/.netlify/functions/voice-health"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
