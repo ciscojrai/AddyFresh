@@ -29,6 +29,20 @@ import { speakWithAddyVoice } from './utils/metaVoice';
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
   {
+    id: 'conv-muse',
+    title: 'Muse AI Assistant',
+    pinned: true,
+    updatedAt: 'Active',
+    messages: [
+      {
+        id: 'm-muse-welcome',
+        sender: 'assistant',
+        text: 'Hello! I am Muse, your live AI discovery guide inside FreshAddy. Ask me about music festivals, clubs, concerts, rain radar, or emergency alerts across the globe.',
+        timestamp: 'Just now',
+      },
+    ],
+  },
+  {
     id: 'conv-1',
     title: 'Tokyo Underground & Synthwave',
     pinned: true,
@@ -205,7 +219,7 @@ export default function App() {
 
   // DeepSeek-style Chat state
   const [conversations, setConversations] = useState<ChatConversation[]>(INITIAL_CONVERSATIONS);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>('conv-muse');
 
   // Netlify MCP connection state
 
@@ -576,8 +590,6 @@ export default function App() {
   const handleSearchToChat = (query: string) => {
     if (!query.trim()) return;
     const trimmed = query.trim();
-    const convId = `conv-${Date.now()}`;
-    const aiAnswer = generateAiResponse(trimmed, events);
 
     searchMcpEventsDetailed({ query: trimmed, domain: 'all', limit: 15 })
       .then((mcpResponse) => {
@@ -591,31 +603,7 @@ export default function App() {
       })
       .catch((err) => console.warn('MCP search during chat query:', err));
 
-    const newConv: ChatConversation = {
-      id: convId,
-      title: trimmed.length > 28 ? `${trimmed.slice(0, 28)}...` : trimmed,
-      pinned: false,
-      updatedAt: 'Just now',
-      messages: [
-        {
-          id: `msg-${Date.now()}-u`,
-          sender: 'user',
-          text: trimmed,
-          timestamp: 'Just now',
-        },
-        {
-          id: `msg-${Date.now()}-a`,
-          sender: 'assistant',
-          text: aiAnswer,
-          timestamp: 'Just now',
-        },
-      ],
-    };
-
-    setConversations((prev) => [newConv, ...prev]);
-    setActiveConversationId(convId);
-    setActiveNav('chat');
-    setIsFeedCollapsed(false);
+    handleNewChat(trimmed);
     setSearchQuery('');
   };
 
@@ -699,7 +687,11 @@ export default function App() {
 
   const handleNewChat = (initialQuery?: string) => {
     const convId = `conv-${Date.now()}`;
-    const initialTitle = initialQuery ? initialQuery.slice(0, 26) : 'New Experience Chat';
+    const initialTitle = initialQuery
+      ? initialQuery.length > 26
+        ? `${initialQuery.slice(0, 26)}…`
+        : initialQuery
+      : 'Chat with Muse';
     const newConv: ChatConversation = {
       id: convId,
       title: initialTitle,
@@ -716,7 +708,7 @@ export default function App() {
             {
               id: `msg-${Date.now()}-a`,
               sender: 'assistant',
-              text: generateAiResponse(initialQuery, events),
+              text: 'Muse is thinking…',
               timestamp: 'Just now',
             },
           ]
@@ -724,7 +716,7 @@ export default function App() {
             {
               id: `msg-${Date.now()}-a`,
               sender: 'assistant',
-              text: 'Hello! I am FreshAddy, your 3D globe discovery assistant. Ask me about live music festivals, conventions, sports derbies, or weather radar around the world.',
+              text: 'Hello! I am Muse, your live AI guide inside FreshAddy. Ask me about music festivals, clubs, concerts, rain radar, or emergency alerts across the globe.',
               timestamp: 'Just now',
             },
           ],
@@ -733,6 +725,10 @@ export default function App() {
     setConversations((prev) => [newConv, ...prev]);
     setActiveConversationId(convId);
     setActiveNav('chat');
+    setIsFeedCollapsed(false);
+    if (initialQuery) {
+      handleSendMessageInChat(convId, initialQuery);
+    }
   };
 
   const handleTogglePin = (id: string) => {

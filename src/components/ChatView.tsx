@@ -239,7 +239,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               type="text"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
-              placeholder="Ask FreshAddy..."
+              placeholder="Ask Muse..."
               className="w-full h-10 bg-slate-900 border border-slate-700/80 rounded-full pl-4 pr-[5.25rem] text-[11px] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-400"
             />
             <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
