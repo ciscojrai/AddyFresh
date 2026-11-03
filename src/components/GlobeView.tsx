@@ -37,213 +37,45 @@ interface GlobeViewProps {
   themeMode?: ThemeMode;
 }
 
-// Format decimal degrees into tactical DMS (e.g. 30°16'09.51"N 097°45'47.67"W)
-function formatDMS(lat: number, lng: number): string {
-  const toDMS = (deg: number, posHem: string, negHem: string, padDeg: number) => {
-    const hem = deg >= 0 ? posHem : negHem;
-    const abs = Math.abs(deg);
-    const d = Math.floor(abs);
-    const mFloat = (abs - d) * 60;
-    const m = Math.floor(mFloat);
-    const s = ((mFloat - m) * 60).toFixed(2);
-    return `${String(d).padStart(padDeg, '0')}°${String(m).padStart(2, '0')}'${String(s).padStart(5, '0')}"${hem}`;
-  };
-  return `${toDMS(lat, 'N', 'S', 2)} ${toDMS(lng, 'E', 'W', 3)}`;
-}
-
-// Compute tactical MGRS-style grid identifier from lat/lng
-function formatTacticalMGRS(lat: number, lng: number): string {
-  const zone = Math.max(1, Math.min(60, Math.floor((lng + 180) / 6) + 1));
-  const bands = 'CDEFGHJKLMNPQRSTUVWX';
-  const bandIdx = Math.max(0, Math.min(bands.length - 1, Math.floor((lat + 80) / 8)));
-  const band = bands[bandIdx] || 'R';
-  const eSq = 'ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.abs(Math.floor(lng * 10)) % 24];
-  const nSq = 'ABCDEFGHJKLMNPQRSTUV'[Math.abs(Math.floor(lat * 10)) % 20];
-  const easting = String(Math.abs(Math.floor((lng % 1) * 10000))).padStart(4, '0');
-  const northing = String(Math.abs(Math.floor((lat % 1) * 10000))).padStart(4, '0');
-  return `${zone}${band} ${eSq}${nSq} ${easting} ${northing}`;
-}
-
 // Approximate camera altitude in meters from MapLibre zoom level
 function zoomToAltitudeMeters(zoom: number): number {
   const orbitMeters = 18500000 / Math.pow(2, Math.max(0, zoom - 1.2));
   return Math.max(45, Math.round(orbitMeters));
 }
 
-function formatAltitude(meters: number): string {
-  if (meters >= 10000) {
-    return `${(meters / 1000).toFixed(0)} KM`;
-  }
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(2)} KM`;
-  }
-  return `${meters} M`;
-}
-
-// Build great-circle-like orbital trajectory arcs for orbital view
-function buildOrbitalArcsGeoJSON() {
-  const arcs: Array<Array<[number, number]>> = [];
-  const inclinations = [
-    { inc: 52, phase: -40 },
-    { inc: -48, phase: 65 },
-  ];
-  inclinations.forEach(({ inc, phase }) => {
-    const coords: Array<[number, number]> = [];
-    for (let lng = -180; lng <= 180; lng += 4) {
-      const rad = ((lng + phase) * Math.PI) / 180;
-      const lat = Math.sin(rad) * inc;
-      coords.push([lng, lat]);
-    }
-    arcs.push(coords);
-  });
-  return {
-    type: 'FeatureCollection' as const,
-    features: arcs.map((coordinates, i) => ({
-      type: 'Feature' as const,
-      properties: { id: `orbit-${i}`, color: i === 0 ? '#ef4444' : '#38bdf8' },
-      geometry: {
-        type: 'LineString' as const,
-        coordinates,
-      },
-    })),
-  };
-}
-
-// Build synthetic God's Eye street-level telemetry nodes (vehicles & cameras) around events
-function buildGodsEyeTelemetryGeoJSON(events: EventItem[]) {
-  const vehFeatures: any[] = [];
-  const camFeatures: any[] = [];
-  const frustumFeatures: any[] = [];
-  const flowFeatures: any[] = [];
-
-  events.forEach((ev, evIdx) => {
-    const roadCoords: Array<[number, number]> = [
-      [ev.lng - 0.008, ev.lat - 0.005],
-      [ev.lng - 0.003, ev.lat - 0.0018],
-      [ev.lng, ev.lat],
-      [ev.lng + 0.0035, ev.lat + 0.0022],
-      [ev.lng + 0.0085, ev.lat + 0.0055],
-    ];
-    flowFeatures.push({
-      type: 'Feature',
-      properties: { id: `flow-${ev.id}` },
-      geometry: { type: 'LineString', coordinates: roadCoords },
-    });
-
-    const offsets = [
-      [-0.0024, -0.0014, '129543'],
-      [-0.0011, -0.0006, '129783'],
-      [0.0008, 0.0005, '130625'],
-      [0.0021, 0.0013, '130834'],
-      [-0.0018, 0.0016, '121462'],
-      [0.0016, -0.0015, '121452'],
-    ];
-    offsets.forEach(([dLng, dLat, code], i) => {
-      vehFeatures.push({
-        type: 'Feature',
-        properties: {
-          id: `veh-${evIdx}-${i}`,
-          label: `VEH-${code}`,
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [ev.lng + (dLng as number), ev.lat + (dLat as number)],
-        },
-      });
-    });
-
-    const camOffsets = [
-      { dLng: -0.0009, dLat: -0.0005, heading: 42, id: `CAM-${evIdx}A` },
-      { dLng: 0.0014, dLat: 0.0009, heading: 215, id: `CAM-${evIdx}B` },
-    ];
-    camOffsets.forEach((cam) => {
-      const cLng = ev.lng + cam.dLng;
-      const cLat = ev.lat + cam.dLat;
-      camFeatures.push({
-        type: 'Feature',
-        properties: { id: cam.id, title: `${ev.city} Optical Node` },
-        geometry: { type: 'Point', coordinates: [cLng, cLat] },
-      });
-
-      const rad = (cam.heading * Math.PI) / 180;
-      const spread = 0.42;
-      const range = 0.0018;
-      const p1: [number, number] = [
-        cLng + Math.sin(rad - spread) * range,
-        cLat + Math.cos(rad - spread) * range,
-      ];
-      const p2: [number, number] = [
-        cLng + Math.sin(rad + spread) * range,
-        cLat + Math.cos(rad + spread) * range,
-      ];
-      frustumFeatures.push({
-        type: 'Feature',
-        properties: { id: `frustum-${cam.id}` },
-        geometry: {
-          type: 'Polygon',
-          coordinates: [[[cLng, cLat], p1, p2, [cLng, cLat]]],
-        },
-      });
-    });
-  });
-
-  return {
-    vehicles: { type: 'FeatureCollection' as const, features: vehFeatures },
-    cameras: { type: 'FeatureCollection' as const, features: camFeatures },
-    frustums: { type: 'FeatureCollection' as const, features: frustumFeatures },
-    flows: { type: 'FeatureCollection' as const, features: flowFeatures },
-  };
-}
-
-// Create a crisp tactical reticle canvas icon for Cesium billboards
-function createCesiumReticleDataUrl(color: string, isSelected: boolean): string {
+// Create a clean, modern event pin dot for Cesium 3D billboards
+function createCesiumPinDataUrl(color: string, isSelected: boolean): string {
   const canvas = document.createElement('canvas');
-  canvas.width = 48;
-  canvas.height = 48;
+  canvas.width = 36;
+  canvas.height = 36;
   const ctx = canvas.getContext('2d');
   if (!ctx) return '';
 
-  const s = isSelected ? 34 : 26;
-  const offset = (48 - s) / 2;
-  const corner = 7;
+  const cx = 18;
+  const cy = 18;
+  const r = isSelected ? 12 : 9;
 
-  ctx.strokeStyle = color;
-  ctx.lineWidth = isSelected ? 2.5 : 2;
-
-  // Top-left bracket
+  // Outer glow
   ctx.beginPath();
-  ctx.moveTo(offset, offset + corner);
-  ctx.lineTo(offset, offset);
-  ctx.lineTo(offset + corner, offset);
+  ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+  ctx.fillStyle = isSelected ? 'rgba(56, 189, 248, 0.4)' : 'rgba(34, 211, 238, 0.25)';
+  ctx.fill();
+
+  // Pin circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  // White border
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#ffffff';
   ctx.stroke();
 
-  // Top-right bracket
+  // Center white dot
   ctx.beginPath();
-  ctx.moveTo(offset + s - corner, offset);
-  ctx.lineTo(offset + s, offset);
-  ctx.lineTo(offset + s, offset + corner);
-  ctx.stroke();
-
-  // Bottom-left bracket
-  ctx.beginPath();
-  ctx.moveTo(offset, offset + s - corner);
-  ctx.lineTo(offset, offset + s);
-  ctx.lineTo(offset + corner, offset + s);
-  ctx.stroke();
-
-  // Bottom-right bracket
-  ctx.beginPath();
-  ctx.moveTo(offset + s - corner, offset + s);
-  ctx.lineTo(offset + s, offset + s);
-  ctx.lineTo(offset + s, offset + s - corner);
-  ctx.stroke();
-
-  // Center glowing dot
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = isSelected ? '#ffffff' : color;
-  ctx.beginPath();
-  ctx.arc(24, 24, isSelected ? 5 : 3.8, 0, Math.PI * 2);
+  ctx.arc(cx, cy, isSelected ? 4 : 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
 
   return canvas.toDataURL();
@@ -434,22 +266,6 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         }
       })();
 
-      // Add orbital trajectory arcs (like Image 3 of God's Eye View)
-      const orbitArcs = buildOrbitalArcsGeoJSON();
-      orbitArcs.features.forEach((f) => {
-        const flat: number[] = [];
-        f.geometry.coordinates.forEach(([lng, lat]) => {
-          flat.push(lng, lat, 420000);
-        });
-        viewer.entities.add({
-          polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArrayHeights(flat),
-            width: 1.6,
-            material: Cesium.Color.fromCssColorString(f.properties.color).withAlpha(0.65),
-          },
-        });
-      });
-
       // Initial orbital camera position over North America / Pacific
       viewer.camera.setView({
         destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 16143645),
@@ -579,7 +395,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     const Cesium = (window as any).Cesium;
     if (!viewer || viewer.isDestroyed() || !Cesium || !cesiumReady) return;
 
-    // Remove previous dynamic event/telemetry entities (preserve orbital arcs)
+    // Remove previous dynamic event entities
     const toRemove: any[] = [];
     viewer.entities.values.forEach((ent: any) => {
       if (ent._isDynamicGodsEye) {
@@ -591,101 +407,34 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     events.forEach((ev) => {
       const isSelected = selectedEvent?.id === ev.id;
       const accent = isSelected ? '#38bdf8' : activeMood.color || '#22d3ee';
-      const shortTitle =
-        ev.title.length > 18 ? ev.title.slice(0, 17).toUpperCase() + '…' : ev.title.toUpperCase();
+      const cleanTitle = ev.title.length > 22 ? ev.title.slice(0, 21) + '…' : ev.title;
 
-      // 1. Tactical Reticle Event Pin
+      // Event Pin Billboard + Clean Title Label
       const pinEntity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 35),
         billboard: {
-          image: createCesiumReticleDataUrl(accent, isSelected),
-          width: isSelected ? 34 : 26,
-          height: isSelected ? 34 : 26,
+          image: createCesiumPinDataUrl(accent, isSelected),
+          width: isSelected ? 30 : 24,
+          height: isSelected ? 30 : 24,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: `${ev.city.toUpperCase()} // ${shortTitle}`,
-          font: 'bold 10px ui-monospace, SFMono-Regular, Menlo, monospace',
-          fillColor: Cesium.Color.fromCssColorString(isSelected ? '#38bdf8' : '#e2e8f0'),
+          text: cleanTitle,
+          font: '600 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fillColor: Cesium.Color.fromCssColorString(isSelected ? '#38bdf8' : '#ffffff'),
           outlineColor: Cesium.Color.fromCssColorString('#020617'),
           outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           showBackground: true,
-          backgroundColor: Cesium.Color.fromCssColorString('#040a16').withAlpha(0.86),
-          backgroundPadding: new Cesium.Cartesian2(6, 3),
-          pixelOffset: new Cesium.Cartesian2(0, -24),
+          backgroundColor: Cesium.Color.fromCssColorString('#0f172a').withAlpha(0.9),
+          backgroundPadding: new Cesium.Cartesian2(7, 4),
+          pixelOffset: new Cesium.Cartesian2(0, -22),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
       pinEntity._isDynamicGodsEye = true;
       pinEntity._freshaddyEvent = ev;
-
-      // 2. Street-level God's Eye Vehicle Reticles [VEH-xxxxxx] (visible when zoomed below 18 km)
-      const vehOffsets = [
-        [-0.0022, -0.0012, '129543'],
-        [-0.0009, -0.0005, '129783'],
-        [0.0008, 0.0005, '130625'],
-        [0.0019, 0.0012, '130834'],
-        [-0.0015, 0.0014, '121462'],
-        [0.0014, -0.0013, '121452'],
-      ];
-      vehOffsets.forEach(([dLng, dLat, code]) => {
-        const vehEnt = viewer.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(
-            ev.lng + (dLng as number),
-            ev.lat + (dLat as number),
-            18
-          ),
-          point: {
-            pixelSize: 6,
-            color: Cesium.Color.fromCssColorString('#4ade80'),
-            outlineColor: Cesium.Color.fromCssColorString('#020617'),
-            outlineWidth: 2,
-            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 18000),
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-          label: {
-            text: `VEH-${code}`,
-            font: 'bold 9px ui-monospace, SFMono-Regular, Menlo, monospace',
-            fillColor: Cesium.Color.fromCssColorString('#a7f3d0'),
-            showBackground: true,
-            backgroundColor: Cesium.Color.fromCssColorString('#020617').withAlpha(0.85),
-            backgroundPadding: new Cesium.Cartesian2(4, 2),
-            pixelOffset: new Cesium.Cartesian2(0, -14),
-            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 14000),
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-        });
-        vehEnt._isDynamicGodsEye = true;
-      });
-
-      // 3. Street-level Traffic Flow Corridor Polyline (visible below 25 km)
-      const flowEnt = viewer.entities.add({
-        polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArrayHeights([
-            ev.lng - 0.007,
-            ev.lat - 0.0045,
-            12,
-            ev.lng - 0.0025,
-            ev.lat - 0.0015,
-            12,
-            ev.lng,
-            ev.lat,
-            12,
-            ev.lng + 0.003,
-            ev.lat + 0.002,
-            12,
-            ev.lng + 0.0075,
-            ev.lat + 0.0048,
-            12,
-          ]),
-          width: 4,
-          material: Cesium.Color.fromCssColorString('#22d3ee').withAlpha(0.75),
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 25000),
-        },
-      });
-      flowEnt._isDynamicGodsEye = true;
     });
   }, [events, selectedEvent, activeMood, cesiumReady, onSelectEvent]);
 
@@ -718,10 +467,6 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           tileSize: 256,
           maxzoom: 19,
         },
-        'orbital-arcs': {
-          type: 'geojson',
-          data: buildOrbitalArcsGeoJSON() as any,
-        },
       },
       layers: [
         {
@@ -742,49 +487,6 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             'raster-saturation': 0.12,
             'raster-brightness-min': 0.04,
             'raster-fade-duration': 150,
-          },
-        },
-        {
-          id: 'orbital-arcs-glow',
-          type: 'line',
-          source: 'orbital-arcs',
-          maxzoom: 6.5,
-          paint: {
-            'line-color': ['get', 'color'],
-            'line-width': 2.2,
-            'line-opacity': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              1,
-              0.55,
-              4.5,
-              0.35,
-              6.2,
-              0,
-            ],
-            'line-blur': 1.5,
-          },
-        },
-        {
-          id: 'orbital-arcs-core',
-          type: 'line',
-          source: 'orbital-arcs',
-          maxzoom: 6.5,
-          paint: {
-            'line-color': ['get', 'color'],
-            'line-width': 1.1,
-            'line-opacity': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              1,
-              0.8,
-              4.5,
-              0.5,
-              6.2,
-              0,
-            ],
           },
         },
         {
@@ -899,95 +601,6 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       } catch {
         // optional 3D building layer
       }
-
-      const telemetryData = buildGodsEyeTelemetryGeoJSON(events);
-
-      if (!map.getSource('godseye-flows')) {
-        map.addSource('godseye-flows', { type: 'geojson', data: telemetryData.flows as any });
-        map.addLayer({
-          id: 'godseye-flows-glow',
-          type: 'line',
-          source: 'godseye-flows',
-          minzoom: 11,
-          paint: {
-            'line-color': '#22d3ee',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 11, 3, 16, 12, 19, 22],
-            'line-opacity': 0.35,
-            'line-blur': 4,
-          },
-        });
-        map.addLayer({
-          id: 'godseye-flows-core',
-          type: 'line',
-          source: 'godseye-flows',
-          minzoom: 11,
-          paint: {
-            'line-color': '#4ade80',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 11, 1.5, 16, 3.5, 19, 6],
-            'line-dasharray': [2, 2],
-            'line-opacity': 0.85,
-          },
-        });
-      }
-
-      if (!map.getSource('godseye-frustums')) {
-        map.addSource('godseye-frustums', { type: 'geojson', data: telemetryData.frustums as any });
-        map.addLayer({
-          id: 'godseye-frustums-fill',
-          type: 'fill',
-          source: 'godseye-frustums',
-          minzoom: 12.5,
-          paint: {
-            'fill-color': '#38bdf8',
-            'fill-opacity': 0.22,
-          },
-        });
-        map.addLayer({
-          id: 'godseye-frustums-line',
-          type: 'line',
-          source: 'godseye-frustums',
-          minzoom: 12.5,
-          paint: {
-            'line-color': '#38bdf8',
-            'line-width': 1.5,
-            'line-opacity': 0.75,
-          },
-        });
-      }
-
-      if (!map.getSource('godseye-vehicles')) {
-        map.addSource('godseye-vehicles', { type: 'geojson', data: telemetryData.vehicles as any });
-        map.addLayer({
-          id: 'godseye-vehicles-dot',
-          type: 'circle',
-          source: 'godseye-vehicles',
-          minzoom: 13,
-          paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 3, 17, 5.5],
-            'circle-color': '#4ade80',
-            'circle-stroke-color': '#020617',
-            'circle-stroke-width': 1.5,
-          },
-        });
-        map.addLayer({
-          id: 'godseye-vehicles-label',
-          type: 'symbol',
-          source: 'godseye-vehicles',
-          minzoom: 13.5,
-          layout: {
-            'text-field': ['get', 'label'],
-            'text-size': 10,
-            'text-offset': [0, -1.3],
-            'text-anchor': 'bottom',
-            'text-allow-overlap': true,
-          },
-          paint: {
-            'text-color': '#e2e8f0',
-            'text-halo-color': 'rgba(2, 6, 23, 0.92)',
-            'text-halo-width': 2,
-          },
-        });
-      }
     });
 
     const updateTelemetry = () => {
@@ -1072,7 +685,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     };
   }, []);
 
-  // 3. Populate Tactical Reticle Event Pins on MapLibre layer
+  // 3. Populate Clean Event Pins on MapLibre layer
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -1080,27 +693,12 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    try {
-      const telemetryData = buildGodsEyeTelemetryGeoJSON(events);
-      (map.getSource('godseye-flows') as maplibregl.GeoJSONSource | undefined)?.setData(
-        telemetryData.flows as any
-      );
-      (map.getSource('godseye-frustums') as maplibregl.GeoJSONSource | undefined)?.setData(
-        telemetryData.frustums as any
-      );
-      (map.getSource('godseye-vehicles') as maplibregl.GeoJSONSource | undefined)?.setData(
-        telemetryData.vehicles as any
-      );
-    } catch {
-      // ignore
-    }
-
     events.forEach((ev) => {
       const isSelected = selectedEvent?.id === ev.id;
       const accent = isSelected ? '#38bdf8' : activeMood.color || '#22d3ee';
 
       const wrapper = document.createElement('div');
-      wrapper.className = 'godseye-reticle-pin group';
+      wrapper.className = 'freshaddy-event-pin group';
       wrapper.style.cssText = `
         display: flex;
         flex-direction: column;
@@ -1110,68 +708,40 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         z-index: ${isSelected ? 45 : 20};
       `;
 
-      const shortTitle =
-        ev.title.length > 18 ? ev.title.slice(0, 17).toUpperCase() + '…' : ev.title.toUpperCase();
+      const displayTitle =
+        ev.title.length > 22 ? ev.title.slice(0, 21) + '…' : ev.title;
       const tag = document.createElement('div');
       tag.style.cssText = `
         margin-bottom: 4px;
-        padding: 2px 6px;
-        background: rgba(4, 10, 22, 0.88);
-        border: 1px solid ${isSelected ? '#38bdf8' : 'rgba(148, 163, 184, 0.4)'};
-        border-radius: 3px;
-        color: ${isSelected ? '#38bdf8' : '#e2e8f0'};
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.05em;
+        padding: 3px 8px;
+        background: rgba(15, 23, 42, 0.92);
+        border: 1px solid ${isSelected ? '#38bdf8' : 'rgba(148, 163, 184, 0.35)'};
+        border-radius: 9999px;
+        color: ${isSelected ? '#38bdf8' : '#f8fafc'};
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 11px;
+        font-weight: 600;
         white-space: nowrap;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.75);
-        backdrop-filter: blur(4px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(6px);
+        transition: all 0.2s ease;
       `;
-      tag.textContent = `${ev.city.toUpperCase()} // ${shortTitle}`;
+      tag.textContent = displayTitle;
 
-      const reticle = document.createElement('div');
-      const size = isSelected ? 24 : 18;
-      reticle.style.cssText = `
-        position: relative;
-        width: ${size}px;
-        height: ${size}px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      const pinDot = document.createElement('div');
+      const dotSize = isSelected ? 16 : 12;
+      pinDot.style.cssText = `
+        width: ${dotSize}px;
+        height: ${dotSize}px;
+        border-radius: 9999px;
+        background: ${accent};
+        border: 2px solid #ffffff;
+        box-shadow: 0 0 10px ${accent}, 0 2px 6px rgba(0, 0, 0, 0.6);
         transition: transform 0.2s ease;
       `;
 
-      const corners = [
-        'top:0;left:0;border-top:1.5px solid;border-left:1.5px solid;',
-        'top:0;right:0;border-top:1.5px solid;border-right:1.5px solid;',
-        'bottom:0;left:0;border-bottom:1.5px solid;border-left:1.5px solid;',
-        'bottom:0;right:0;border-bottom:1.5px solid;border-right:1.5px solid;',
-      ];
-      corners.forEach((pos) => {
-        const c = document.createElement('span');
-        c.style.cssText = `
-          position: absolute;
-          width: 5px;
-          height: 5px;
-          ${pos}
-          border-color: ${accent};
-        `;
-        reticle.appendChild(c);
-      });
-
-      const dot = document.createElement('div');
-      dot.style.cssText = `
-        width: ${isSelected ? 7 : 5}px;
-        height: ${isSelected ? 7 : 5}px;
-        border-radius: 9999px;
-        background: ${isSelected ? '#ffffff' : accent};
-        box-shadow: 0 0 10px ${accent}, 0 0 18px ${accent};
-      `;
-      reticle.appendChild(dot);
-
       wrapper.appendChild(tag);
-      wrapper.appendChild(reticle);
+      wrapper.appendChild(pinDot);
 
       wrapper.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1748,13 +1318,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   }, [alertsOn, cesiumReady]);
 
   const altMeters = telemetry.altMeters || zoomToAltitudeMeters(telemetry.zoom);
-  const gsdMeters = (altMeters / 2650).toFixed(2);
   const isStreetLevel = altMeters < 8500 || telemetry.zoom >= 12;
-  const activeSectorName = selectedEvent
-    ? `${selectedEvent.city.toUpperCase()} // ${(selectedEvent.venue || selectedEvent.title).toUpperCase()}`
-    : !isStreetLevel
-    ? 'ORBITAL RECON // GLOBAL SECTOR'
-    : 'METRO RECON // ACTIVE TARGET';
 
   return (
     <div
@@ -1823,8 +1387,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           </span>
         </div>
         {selectedEvent && (
-          <div className="font-mono text-[8.5px] tracking-[0.08em] text-slate-300/90 truncate">
-            {activeSectorName}
+          <div className="text-[10px] font-medium text-slate-300 truncate">
+            📍 {selectedEvent.title} · {selectedEvent.city}
           </div>
         )}
       </div>
@@ -1987,10 +1551,10 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(34,211,238,0.45)]'
               : 'bg-slate-950/80 border-slate-700/80 text-slate-300 hover:border-cyan-400/60 hover:text-cyan-300'
           }`}
-          title={isStreetLevel ? 'Return to 3D Orbit' : "Dive to God's Eye Street Level"}
+          title={isStreetLevel ? 'Return to 3D Earth' : "Dive to Street 3D"}
         >
           <Box size={11} />
-          <span>{isStreetLevel ? 'ORBIT' : 'STREET 3D'}</span>
+          <span>{isStreetLevel ? 'EARTH' : 'STREET 3D'}</span>
         </button>
         <button
           type="button"
