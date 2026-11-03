@@ -847,20 +847,15 @@ export default function App() {
                 </button>
               </div>
 
-              {/* AXIS Swap Pill Button */}
+              {/* Axis Swap Pill Button: exact 'Axis Swap' label, no icon, no right/left/top/bottom label */}
               <button
                 type="button"
                 onClick={handleToggleAxisSwap}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 text-[10px] font-semibold backdrop-blur-md shadow-lg transition-all cursor-pointer active:scale-95"
-                title={
-                  effectiveDeviceMode === 'phone'
-                    ? `AXIS Swap (Current: Globe ${globePosition.toUpperCase()} · Click to swap Top/Bottom)`
-                    : `AXIS Swap (Current: Globe ${globePosition.toUpperCase()} · Click to swap Right/Left)`
-                }
+                className="px-2.5 py-1 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 text-[10px] font-semibold backdrop-blur-md shadow-lg transition-all cursor-pointer active:scale-95"
+                title="Axis Swap"
+                aria-label="Axis Swap"
               >
-                {effectiveDeviceMode === 'phone' ? <ArrowUpDown size={11} /> : <ArrowLeftRight size={11} />}
-                <span>AXIS Swap</span>
-                <span className="font-mono text-[9px] uppercase text-slate-400 pl-0.5">[{globePosition}]</span>
+                <span>Axis Swap</span>
               </button>
             </div>
             {/* MapLibre Map instance for map pins and markers */}
