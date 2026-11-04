@@ -1613,7 +1613,14 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     const map = mapRef.current;
     const viewer = cesiumViewerRef.current;
     const Cesium = (window as any).Cesium;
-    const CAM_LAYERS = ['public-cam-hit', 'public-cam-glow', 'public-cam-circle', 'public-cam-icon', 'public-cam-label'];
+    const CAM_LAYERS = [
+      'public-cam-clusters',
+      'public-cam-cluster-count',
+      'public-cam-hit',
+      'public-cam-glow',
+      'public-cam-circle',
+      'public-cam-label',
+    ];
 
     if (!camerasOn) {
       setActiveCamera(null);
@@ -1637,7 +1644,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       if (cancelled || !cams.length) return;
       const geojson = buildCameraGeoJSON(cams);
 
-      // 1. Paint on MapLibre 3D Globe
+      // 1. Paint on MapLibre 3D Globe with Clustered GeoJSON Source
       if (map && map.getStyle()) {
         try {
           const src = map.getSource('public-cameras') as maplibregl.GeoJSONSource | undefined;
@@ -1647,14 +1654,70 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             map.addSource('public-cameras', {
               type: 'geojson',
               data: geojson as any,
+              cluster: true,
+              clusterMaxZoom: 11,
+              clusterRadius: 50,
             });
           }
 
+          // Cluster Bubbles (Density Step Colors)
+          if (!map.getLayer('public-cam-clusters')) {
+            map.addLayer({
+              id: 'public-cam-clusters',
+              type: 'circle',
+              source: 'public-cameras',
+              filter: ['has', 'point_count'],
+              paint: {
+                'circle-color': [
+                  'step',
+                  ['get', 'point_count'],
+                  '#10b981', // emerald green (< 20 cams)
+                  20,
+                  '#059669', // deep emerald (20-100 cams)
+                  100,
+                  '#047857', // dense cluster
+                ],
+                'circle-radius': [
+                  'step',
+                  ['get', 'point_count'],
+                  16,
+                  20,
+                  20,
+                  100,
+                  26,
+                ],
+                'circle-stroke-width': 2.5,
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.92,
+              },
+            });
+          }
+
+          // Cluster Number Count
+          if (!map.getLayer('public-cam-cluster-count')) {
+            map.addLayer({
+              id: 'public-cam-cluster-count',
+              type: 'symbol',
+              source: 'public-cameras',
+              filter: ['has', 'point_count'],
+              layout: {
+                'text-field': '{point_count_abbreviated}',
+                'text-size': 11,
+                'text-font': ['Open Sans Bold'],
+              },
+              paint: {
+                'text-color': '#ffffff',
+              },
+            });
+          }
+
+          // Unclustered Individual Points
           if (!map.getLayer('public-cam-hit')) {
             map.addLayer({
               id: 'public-cam-hit',
               type: 'circle',
               source: 'public-cameras',
+              filter: ['!', ['has', 'point_count']],
               paint: {
                 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 14, 10, 22, 16, 30],
                 'circle-color': '#000000',
@@ -1668,6 +1731,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               id: 'public-cam-glow',
               type: 'circle',
               source: 'public-cameras',
+              filter: ['!', ['has', 'point_count']],
               paint: {
                 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 10, 10, 16, 16, 22],
                 'circle-color': '#10b981',
@@ -1682,6 +1746,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               id: 'public-cam-circle',
               type: 'circle',
               source: 'public-cameras',
+              filter: ['!', ['has', 'point_count']],
               paint: {
                 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 4.5, 10, 6.5, 16, 8.5],
                 'circle-color': '#059669',
@@ -1696,6 +1761,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               id: 'public-cam-label',
               type: 'symbol',
               source: 'public-cameras',
+              filter: ['!', ['has', 'point_count']],
               minzoom: 11,
               layout: {
                 'text-field': ['get', 'name'],
@@ -1722,6 +1788,30 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             }
           }
 
+          // Click Cluster to zoom in & expand
+          if (!(map as any).__cameraClusterClickBound) {
+            (map as any).__cameraClusterClickBound = true;
+            map.on('click', 'public-cam-clusters', (e) => {
+              const features = map.queryRenderedFeatures(e.point, { layers: ['public-cam-clusters'] });
+              const clusterId = features[0]?.properties?.cluster_id;
+              const source = map.getSource('public-cameras') as any;
+              if (source && typeof source.getClusterExpansionZoom === 'function') {
+                source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
+                  if (err) return;
+                  const coords = (features[0].geometry as any).coordinates;
+                  map.easeTo({ center: coords, zoom: Math.min(15, zoom + 0.8), duration: 700 });
+                });
+              }
+            });
+            map.on('mouseenter', 'public-cam-clusters', () => {
+              map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'public-cam-clusters', () => {
+              map.getCanvas().style.cursor = '';
+            });
+          }
+
+          // Click on Individual Camera: Open Live Feed Card
           if (!(map as any).__cameraClickBound) {
             (map as any).__cameraClickBound = true;
             const openCam = (e: maplibregl.MapLayerMouseEvent) => {
@@ -1729,7 +1819,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               if (orig.__camOpened) return;
               orig.__camOpened = true;
               const f = e.features?.[0];
-              if (!f) return;
+              if (!f || f.properties?.point_count) return;
               const coords = (f.geometry as any).coordinates as [number, number];
               const p = (f.properties ?? {}) as any;
               setActiveCamera({
@@ -1747,7 +1837,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               map.flyTo({ center: coords, zoom: 15.5, pitch: 45, duration: 1600 });
             };
 
-            for (const id of CAM_LAYERS) {
+            for (const id of ['public-cam-hit', 'public-cam-glow', 'public-cam-circle']) {
               map.on('mouseenter', id, () => {
                 map.getCanvas().style.cursor = 'pointer';
               });
@@ -1760,7 +1850,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         } catch {}
       }
 
-      // 2. Paint on Cesium 3D Globe
+      // 2. Paint on Cesium 3D Globe with Adaptive Distance Clustering
       if (viewer && !viewer.isDestroyed() && Cesium) {
         try {
           const toRem: any[] = [];
@@ -1769,17 +1859,27 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           });
           toRem.forEach((ent) => viewer.entities.remove(ent));
 
-          cams.forEach((cam) => {
+          // When far in orbit (> 1,200 km), show spaced representative pins so dots do not overlap into solid blobs
+          const currentHeight = viewer.camera.positionCartographic?.height || 16000000;
+          const isFarOrbit = currentHeight > 2500000;
+          const isMidOrbit = currentHeight > 600000;
+          const displayCams = isFarOrbit
+            ? cams.filter((_, idx) => idx % 15 === 0)
+            : isMidOrbit
+            ? cams.filter((_, idx) => idx % 5 === 0)
+            : cams;
+
+          displayCams.forEach((cam) => {
             const ent = viewer.entities.add({
               position: Cesium.Cartesian3.fromDegrees(cam.lng, cam.lat, 40),
               point: {
-                pixelSize: 9,
+                pixelSize: isFarOrbit ? 6 : isMidOrbit ? 8 : 10,
                 color: Cesium.Color.fromCssColorString('#10b981'),
                 outlineColor: Cesium.Color.fromCssColorString('#ffffff'),
                 outlineWidth: 2,
                 disableDepthTestDistance: Number.POSITIVE_INFINITY,
               },
-              ...(camerasState === 2
+              ...(camerasState === 2 && !isFarOrbit
                 ? {
                     label: {
                       text: `📹 ${cam.name.slice(0, 22)}`,
