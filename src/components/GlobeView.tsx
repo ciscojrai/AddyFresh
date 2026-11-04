@@ -1934,57 +1934,57 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="app-globe-dpad-bar absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 pointer-events-auto"
+        className="app-globe-dpad-bar absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 sm:gap-1.5 pointer-events-auto"
         role="toolbar"
         aria-label="Globe Navigation Bar"
       >
         <button
           type="button"
           onClick={() => handleTvDpadPan('up')}
-          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          className="app-globe-nav-btn w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
           title="Pan Up"
         >
-          <ArrowUp size={16} />
+          <ArrowUp size={12} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadPan('down')}
-          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          className="app-globe-nav-btn w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
           title="Pan Down"
         >
-          <ArrowDown size={16} />
+          <ArrowDown size={12} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadPan('left')}
-          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          className="app-globe-nav-btn w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
           title="Pan Left"
         >
-          <ArrowLeft size={16} />
+          <ArrowLeft size={12} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadPan('right')}
-          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          className="app-globe-nav-btn w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
           title="Pan Right"
         >
-          <ArrowRight size={16} />
+          <ArrowRight size={12} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadZoom('out')}
-          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          className="app-globe-nav-btn w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
           title="Zoom Out (-)"
         >
-          <Minus size={16} />
+          <Minus size={12} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadZoom('in')}
-          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          className="app-globe-nav-btn w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
           title="Zoom In (+)"
         >
-          <Plus size={16} />
+          <Plus size={12} />
         </button>
 
         {/* Mouse Pointer Button (ONLY added in TV UI 10' mode) */}
