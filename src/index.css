@@ -321,6 +321,34 @@ html, body, #root {
   height: 18px !important;
 }
 
+/* TV 10' Globe Voice & Speaker: large matching TV UI buttons */
+.app-shell[data-device="tv"] .app-globe-voice-dock button[data-voice-state] {
+  width: 48px !important;
+  height: 48px !important;
+  border-width: 2px !important;
+}
+
+.app-shell[data-device="tv"] .app-globe-voice-dock .app-globe-speaker-btn {
+  width: 48px !important;
+  height: 48px !important;
+  border-width: 2px !important;
+}
+
+.app-shell[data-device="tv"] .app-globe-voice-dock .app-globe-speaker-btn svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+/* TV 10' Bottom Controls Nav: scale icon buttons for 10-foot interaction */
+.app-shell[data-device="tv"] .app-controls nav button {
+  padding: 12px !important;
+}
+
+.app-shell[data-device="tv"] .app-controls nav button svg {
+  width: 26px !important;
+  height: 26px !important;
+}
+
 .app-shell[data-device="tv"] button:focus-visible,
 .app-shell[data-device="tv"] input:focus-visible {
   outline: 2.5px solid #22d3ee !important;

@@ -1247,6 +1247,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       'hazard-alert-hit',
       'hazard-alert-halo',
       'hazard-alert-dot',
+      'hazard-alert-text',
     ];
 
     if (!alertsOn) {
@@ -1408,8 +1409,34 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               },
             });
           }
+          if (!map.getLayer('hazard-alert-text')) {
+            map.addLayer({
+              id: 'hazard-alert-text',
+              type: 'symbol',
+              source: 'hazard-alerts',
+              layout: {
+                'text-field': ['concat', '⚠️ ', ['upcase', ['get', 'hazard']]],
+                'text-size': 9.5,
+                'text-offset': [0, -1.2],
+                'text-anchor': 'bottom',
+                'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                'text-allow-overlap': false,
+              },
+              paint: {
+                'text-color': '#fef08a',
+                'text-halo-color': '#0d1117',
+                'text-halo-width': 1.8,
+              },
+            });
+          }
           for (const id of ALERT_LAYERS) {
-            if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
+            if (map.getLayer(id)) {
+              if (id === 'hazard-alert-text') {
+                map.setLayoutProperty(id, 'visibility', alertsState === 2 ? 'visible' : 'none');
+              } else {
+                map.setLayoutProperty(id, 'visibility', 'visible');
+              }
+            }
           }
           if (!(map as any).__alertsClickBound) {
             (map as any).__alertsClickBound = true;
@@ -1864,13 +1891,13 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </button>
       </div>
 
-      {/* BOTTOM-RIGHT: Circular Tactical Control Dock (Voice & Audio) + Horizontal Zoom (+ / -) */}
+      {/* BOTTOM-RIGHT: Circular Tactical Control Dock (Conversation/Voice Icon & Speaker) */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="absolute bottom-2.5 right-3 z-20 flex items-center justify-end gap-1.5 pointer-events-auto"
+        className="app-globe-voice-dock absolute bottom-2.5 right-3 z-20 flex items-center justify-end gap-1.5 pointer-events-auto"
       >
-        {/* Voice: starts or ends the Pagos conversation session */}
+        {/* Voice / Conversation icon: starts or ends the Pagos conversation session */}
         {onToggleVoice && (
           <VoiceButton
             variant="globe"
@@ -1880,66 +1907,20 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           />
         )}
 
-        {/* Globe speaker: audio on/off for the globe voice chat only, separate from panel. */}
+        {/* Globe speaker: audio on/off for the globe voice chat only */}
         {onToggleAudio && (
           <button
             type="button"
             onClick={onToggleAudio}
             title={audioOn ? 'Globe audio: On (tap to mute)' : 'Globe audio: Off (tap to unmute)'}
             aria-label={audioOn ? 'Turn globe audio off' : 'Turn globe audio on'}
-            className={`w-9 h-9 rounded-full flex items-center justify-center border shadow-md transition-colors cursor-pointer ${
+            className={`app-globe-speaker-btn w-9 h-9 rounded-full flex items-center justify-center border shadow-md transition-all cursor-pointer ${
               audioOn ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-slate-800 text-slate-400 border-slate-700'
             }`}
           >
             {audioOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
         )}
-
-        {/* Zoom Out (-) */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            const viewer = cesiumViewerRef.current;
-            if (engineMode === 'cesium' && viewer && !viewer.isDestroyed()) {
-              const h = viewer.camera.positionCartographic?.height || 1000;
-              viewer.camera.zoomOut(Math.min(12000000, Math.max(200, h * 0.85)));
-              return;
-            }
-            const map = mapRef.current;
-            if (!map) return;
-            const nextZoom = Math.max(1.1, map.getZoom() - (map.getZoom() > 10 ? 1.4 : 1.1));
-            const nextPitch = nextZoom < 6 ? 0 : map.getPitch();
-            map.easeTo({ zoom: nextZoom, pitch: nextPitch, duration: 450 });
-          }}
-          className="w-7 h-7 rounded-full bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-cyan-300 flex items-center justify-center text-xs font-bold transition-all shadow-md active:scale-90 cursor-pointer"
-          title="Zoom Out (-)"
-        >
-          <Minus size={13} />
-        </button>
-
-        {/* Zoom In (+) */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            const viewer = cesiumViewerRef.current;
-            if (engineMode === 'cesium' && viewer && !viewer.isDestroyed()) {
-              const h = viewer.camera.positionCartographic?.height || 10000000;
-              viewer.camera.zoomIn(Math.max(120, h * 0.48));
-              return;
-            }
-            const map = mapRef.current;
-            if (!map) return;
-            const nextZoom = Math.min(19.2, map.getZoom() + (map.getZoom() < 6 ? 1.4 : 1.1));
-            const nextPitch = nextZoom >= 12.5 ? 62 : map.getPitch();
-            map.easeTo({ zoom: nextZoom, pitch: nextPitch, duration: 450 });
-          }}
-          className="w-7 h-7 rounded-full bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-cyan-300 flex items-center justify-center text-xs font-bold transition-all shadow-md active:scale-90 cursor-pointer"
-          title="Zoom In (+)"
-        >
-          <Plus size={13} />
-        </button>
       </div>
 
       {/* TOP-RIGHT: Cesium Ion & Google Maps small attribution badge */}
@@ -2006,17 +1987,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           <Plus size={20} />
         </button>
 
-        {/* Mouse Toggle Button with Floating "Mouse" / "D-Pad" Pill Badge */}
+        {/* Mouse / D-Pad Toggle Button */}
         <div className="relative flex flex-col items-center">
-          <span
-            className={`absolute -top-7 px-3 py-0.5 rounded-full text-[11px] font-bold tracking-wide border backdrop-blur-md whitespace-nowrap transition-all ${
-              tvMouseMode
-                ? 'bg-slate-950/90 border-cyan-400 text-white shadow-[0_0_12px_rgba(34,211,238,0.45)]'
-                : 'bg-slate-950/85 border-slate-600 text-slate-300'
-            }`}
-          >
-            {tvMouseMode ? 'Mouse' : 'D-Pad'}
-          </span>
           <button
             type="button"
             onClick={() => {
