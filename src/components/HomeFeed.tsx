@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { EventItem, StreetViewTarget } from '../types';
-import { Share2, Heart, Menu, Compass, RefreshCw, Radio, CheckCircle2, Sparkles } from 'lucide-react';
+import { Share2, Heart, Menu, Compass, RefreshCw, Radio, CheckCircle2, Sparkles, Play } from 'lucide-react';
+import { YOUTUBE_VIDEOS } from '../data/youtubeVideos';
 import { safeShare } from '../utils/share';
 import { useHaptic } from '../hooks/useHaptic';
 
@@ -370,6 +371,48 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           </div>
         );
       })}
+
+      {/* VIDEOS — real YouTube videos, tap to watch on YouTube (new tab, no in-app autoplay) */}
+      <div className="pt-2 space-y-3">
+        <div className="flex items-center gap-2 px-1">
+          <span className="flex items-center justify-center w-6 h-6 rounded-md bg-red-600">
+            <Play size={13} className="fill-white text-white ml-0.5" />
+          </span>
+          <h2 className="text-[15px] font-bold text-slate-100 tracking-tight">Videos</h2>
+          <span className="text-xs text-slate-400">Watch on YouTube</span>
+        </div>
+        {YOUTUBE_VIDEOS.map((vid) => (
+          <a
+            key={vid.id}
+            href={vid.url}
+            target="_blank"
+            rel="noreferrer"
+            className="group relative block rounded-2xl bg-[#0c1222] border border-slate-800/80 hover:border-red-500/50 transition-all duration-200 overflow-hidden shadow-lg"
+            title={`Watch on YouTube: ${vid.title}`}
+          >
+            <div className="relative w-full h-48 bg-slate-900 overflow-hidden">
+              <img
+                src={vid.thumbnail}
+                alt={vid.title}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-colors" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-14 h-11 bg-red-600 rounded-2xl flex items-center justify-center shadow-[0_0_24px_rgba(220,38,38,0.6)] group-hover:scale-110 transition-transform">
+                  <Play size={20} className="fill-white text-white ml-0.5" />
+                </div>
+              </div>
+            </div>
+            <div className="p-3.5 space-y-1">
+              <h3 className="text-[15px] font-bold text-slate-100 tracking-tight leading-snug group-hover:text-red-400 transition-colors">
+                {vid.title}
+              </h3>
+              <p className="text-xs text-slate-400">{vid.channel} · YouTube</p>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   );
 };

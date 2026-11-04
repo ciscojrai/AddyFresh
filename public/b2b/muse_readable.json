@@ -1,0 +1,35 @@
+{
+  "format": "muse-readable",
+  "version": "2026-11-04",
+  "how_muse_uses_it": "When a user taps or says a pill, Muse must fly_to with the exact lat/lng from the source file below. Never invent coordinates, never invent a landmark. Space stations are NOT in here: they move. Use Spaceports for fixed launch sites. Underwater Internet Cables is excluded: lines, not fixed landmarks.",
+  "sources": {
+    "b2b_landmarks": "/b2b/global_infrastructure_combined.json",
+    "b2b_weekly": "/b2b/globe_weekly_categories.json",
+    "dummy_packages": "addyfresh-dummy-packages-2026-11-04.json (56 items, 5 rows, 27 pills, dummy only)"
+  },
+  "pin_schema": {"id": "string", "name": "string", "category": "string", "latitude": "number", "longitude": "number", "visual_stat": "string", "fact": "string"},
+  "categories": [
+    {"pill": "Solar Farms", "category": "Largest Solar Farms", "count": 13, "first_pin": {"name": "Talatan Solar Park (Gonghe)", "lat": 36.15, "lng": 100.85}},
+    {"pill": "Airports", "category": "Busiest Airports", "count": 10, "first_pin": {"name": "Hartsfield-Jackson Atlanta International Airport (ATL)", "lat": 33.6407, "lng": -84.4277}},
+    {"pill": "Cargo Airports", "category": "Global Air Cargo Hubs", "count": 12, "first_pin": {"name": "Hong Kong International Airport (HKG)", "lat": 22.308, "lng": 113.9185}},
+    {"pill": "Tall Buildings", "category": "Tallest Skyscrapers", "count": 10, "first_pin": {"name": "Burj Khalifa", "lat": 25.1972, "lng": 55.2744}},
+    {"pill": "Spaceports", "category": "Spaceports & Launch Sites", "count": 13, "first_pin": {"name": "Cape Canaveral Space Force Station", "lat": 28.4889, "lng": -80.5778}},
+    {"pill": "Wind Farms", "category": "Largest Wind Farms", "count": 12, "first_pin": {"name": "Gansu Wind Farm (Jiuquan Wind Power Base)", "lat": 39.7719, "lng": 97.4042}},
+    {"pill": "Superports", "category": "Global Superports", "count": 11, "first_pin": {"name": "Port of Shanghai (Yangshan)", "lat": 30.625, "lng": 122.065}},
+    {"pill": "Dams", "category": "Major Dams & Hydroelectric", "count": 11, "first_pin": {"name": "Three Gorges Dam", "lat": 30.823, "lng": 111.003}},
+    {"pill": "Nuclear Plants", "category": "Nuclear Power Plants", "count": 10, "first_pin": {"name": "Kashiwazaki-Kariwa Nuclear Power Plant", "lat": 37.4286, "lng": 138.5973}},
+    {"pill": "Stadiums", "category": "Mega-Stadiums", "count": 11, "first_pin": {"name": "Narendra Modi Stadium", "lat": 23.0919, "lng": 72.5975}},
+    {"pill": "Data Centers", "category": "Hyperscale Data Centers", "count": 16, "first_pin": {"name": "Northern Virginia (Loudoun County, Data Center Alley)", "lat": 39.02, "lng": -77.47}},
+    {"pill": "Factories", "category": "Mega-Factories", "count": 14, "first_pin": {"name": "Boeing Everett Factory", "lat": 47.922, "lng": -122.273}},
+    {"pill": "Chip Fabs", "category": "Semiconductor Mega-Fabs", "count": 10, "first_pin": {"name": "TSMC Fab 18 (Tainan)", "lat": 23.1075, "lng": 120.2717}},
+    {"pill": "Battery Plants", "category": "Battery Gigafactories", "count": 10, "first_pin": {"name": "CATL Yibin Plant", "lat": 28.7519, "lng": 104.643}},
+    {"pill": "LNG Terminals", "category": "LNG Export Terminals", "count": 10, "first_pin": {"name": "Ras Laffan Industrial City", "lat": 25.91, "lng": 51.56}},
+    {"pill": "Refineries", "category": "Oil Refineries", "count": 10, "first_pin": {"name": "Jamnagar Refinery Complex", "lat": 22.34, "lng": 69.86}},
+    {"pill": "Mines", "category": "Critical Mineral Mines", "count": 10, "first_pin": {"name": "Escondida Copper Mine", "lat": -24.27, "lng": -69.07}},
+    {"pill": "Military Bases", "category": "Military Bases", "count": 14, "first_pin": {"name": "Area 51 (Groom Lake)", "lat": 37.235, "lng": -115.8111}},
+    {"pill": "Stock Exchanges", "category": "Global Stock Exchanges", "count": 10, "first_pin": {"name": "New York Stock Exchange", "lat": 40.7069, "lng": -74.0113}}
+  ],
+  "total_b2b_pins_in_source": 231,
+  "total_fixed_landmark_pins": 217,
+  "dummy_rows": ["Live sports", "Reality TV", "Personal", "Contractor", "Calendar"]
+}

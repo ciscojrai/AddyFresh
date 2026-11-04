@@ -15,17 +15,32 @@ import {
   Search,
   Volume2,
   VolumeX,
+  Paperclip,
+  RotateCw,
 } from 'lucide-react';
+
 import { safeShare } from '../utils/share';
-import { startMetaVoiceCapture, MetaVoiceCaptureHandle } from '../utils/metaVoice';
+import { parseUploadFile } from '../utils/uploadData';
+import { startMetaVoiceCapture, MetaVoiceCaptureHandle } from '../utils/metaVoice'; 
 import PagosPop from './PagosPop';
 import type { SessionState } from '../voice/conversation';
+
+export interface MuseGlobeAction {
+  type: string;
+  lat?: number;
+  lon?: number;
+  label?: string;
+  enabled?: boolean;
+}
 
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';
   text: string;
   timestamp: string;
+  /** Muse globe actions stored when this assistant reply landed, so the
+   * refresh icon can re-apply them later without a new Muse call. */
+  globeActions?: MuseGlobeAction[];
 }
 
 export interface ChatConversation {
@@ -53,6 +68,10 @@ interface ChatViewProps {
   /** Panel speaker, separate from the globe speaker. Audio on/off only. */
   audioOn?: boolean;
   onToggleAudio?: () => void;
+  /** File upload: Pagos reads the file and puts its pins on the globe. */
+  onUploadData?: (items: EventItem[]) => void;
+  /** Refresh: re-apply a logged message's stored globe actions, no Muse call. */
+  onRefreshGlobe?: (actions?: MuseGlobeAction[]) => void;
   /** Back action for the arrow that replaces New Chat in the list header. */
   onBackFromChat?: () => void;
 }
@@ -71,8 +90,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onToggleVoice,
   audioOn = true,
   onToggleAudio,
+  onUploadData,
+  onRefreshGlobe,
 }) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [inputVal, setInputVal] = useState('');
   const [listSearch, setListSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -291,6 +314,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
             // this exact text while Pagos is thinking — that is the thinking
             // state, so Pagos pops up next to it here, every trigger.
             const isThinking = !isUser && msg.text === 'Pagos is thinking…';
+            // Refresh target: an assistant message refreshes its own stored
+            // actions; a user message refreshes the assistant reply that
+            // follows it, so the pair works as one logged result.
+            const refreshActions = isUser
+              ? activeConv.messages.slice(msgIdx + 1).find((m) => m.sender === 'assistant')?.globeActions
+              : msg.globeActions;
             return (
               <div
                 key={msg.id}
@@ -306,8 +335,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   {msg.text}
                 </div>
-                <span className="text-[10px] text-slate-500 mt-1 px-1">
+                <span className="text-[10px] text-slate-500 mt-1 px-1 flex items-center gap-1.5">
                   {msg.timestamp}
+                  {!isThinking && onRefreshGlobe && (
+                    <button
+                      type="button"
+                      onClick={() => onRefreshGlobe(refreshActions)}
+                      title="Show on globe again"
+                      aria-label="Show on globe again"
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-slate-500 hover:text-cyan-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                    >
+                      <RotateCw size={12} />
+                    </button>
+                  )}
                 </span>
               </div>
             );
@@ -320,6 +360,41 @@ export const ChatView: React.FC<ChatViewProps> = ({
           onSubmit={handleSend}
           className="p-2.5 bg-[#090e1c] border-t border-slate-800/80 flex items-center gap-2 shrink-0"
         >
+          {onUploadData && (
+            <>
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept=".json,.csv,.txt"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  try {
+                    const items = await parseUploadFile(file);
+                    if (items.length === 0) {
+                      setUploadNotice(`No pins found in ${file.name} — needs name, lat, lng.`);
+                    } else {
+                      onUploadData(items);
+                      setUploadNotice(`Pagos added ${items.length} pins to the globe from ${file.name}.`);
+                    }
+                  } catch {
+                    setUploadNotice(`Could not read ${file.name}.`);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => uploadInputRef.current?.click()}
+                title="Upload a dummy data file — Pagos reads it and puts it on the globe"
+                aria-label="Upload data file"
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 cursor-pointer text-slate-400 hover:text-cyan-300"
+              >
+                <Paperclip size={16} />
+              </button>
+            </>
+          )}
           <div className="relative flex-1 min-w-0">
             <input
               type="text"
@@ -419,6 +494,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </button>
           )}
         </form>
+        {uploadNotice && (
+          <div className="bg-[#090e1c] text-center text-[10px] text-cyan-300 px-3 pb-1 shrink-0 select-none">
+            {uploadNotice}
+          </div>
+        )}
         <div className="bg-[#090e1c] text-center text-[9px] text-slate-600 pb-1 -mt-1 shrink-0 select-none">
           Powered by Meta Muse
         </div>

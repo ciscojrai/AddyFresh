@@ -1,0 +1,441 @@
+{
+  "meta": {
+    "title": "Weekly rotating globe categories (Fire TV)",
+    "how_it_works": "Each week feature ONE of the 5 new categories as the default globe filter, plus 3 evergreen spotlights from the core 15. Change featured_category on week_start. On Firestick, map Left/Right on the category row and Autoplay a 20s pin tour.",
+    "engagement_loop": [
+      "Home row: Featured This Week",
+      "Pin focus: big visual_stat + one-line fact (10-foot UI)",
+      "End of tour CTA: Next week preview chip",
+      "Optional: remember last 3 viewed pins in local storage"
+    ],
+    "status": "DRAFT — not deployed",
+    "heatmap_categories": [
+      "Battery Gigafactories",
+      "Critical Mineral Mines",
+      "Hyperscale Data Centers",
+      "Largest Solar Farms",
+      "Largest Wind Farms"
+    ],
+    "how_heatmaps_work": "When featured_render is heatmap, draw a Gaussian density field from that category's points (weight = heat_weight). Keep pin mode for iconic one-off sites (stadiums, towers, spaceports). On Firestick: heat is the ambient layer; top 3 hotspots remain focusable with the remote."
+  },
+  "new_categories": [
+    {
+      "category": "Semiconductor Mega-Fabs",
+      "weekly_hook": "Chip plants that power every phone, car, and AI rack.",
+      "pin_count": 10,
+      "pin_ids": [
+        "fab-01",
+        "fab-02",
+        "fab-03",
+        "fab-04",
+        "fab-05",
+        "fab-06",
+        "fab-07",
+        "fab-08",
+        "fab-09",
+        "fab-10"
+      ],
+      "render": "pin"
+    },
+    {
+      "category": "Battery Gigafactories",
+      "weekly_hook": "The factories filling the world's EVs and grid storage.",
+      "pin_count": 10,
+      "pin_ids": [
+        "bat-01",
+        "bat-02",
+        "bat-03",
+        "bat-04",
+        "bat-05",
+        "bat-06",
+        "bat-07",
+        "bat-08",
+        "bat-09",
+        "bat-10"
+      ],
+      "render": "heatmap",
+      "heatmap_note": "Weekly rotator: EV manufacturing belts (China, EU, US Midwest) as heat."
+    },
+    {
+      "category": "LNG Export Terminals",
+      "weekly_hook": "Where natural gas becomes ships of energy for the world.",
+      "pin_count": 10,
+      "pin_ids": [
+        "lng-01",
+        "lng-02",
+        "lng-03",
+        "lng-04",
+        "lng-05",
+        "lng-06",
+        "lng-07",
+        "lng-08",
+        "lng-09",
+        "lng-10"
+      ],
+      "render": "pin"
+    },
+    {
+      "category": "Global Stock Exchanges",
+      "weekly_hook": "Trading floors and matching engines that move global capital.",
+      "pin_count": 10,
+      "pin_ids": [
+        "exch-01",
+        "exch-02",
+        "exch-03",
+        "exch-04",
+        "exch-05",
+        "exch-06",
+        "exch-07",
+        "exch-08",
+        "exch-09",
+        "exch-10"
+      ],
+      "render": "pin"
+    },
+    {
+      "category": "Critical Mineral Mines",
+      "weekly_hook": "The pits and shafts behind EVs, turbines, and defense tech.",
+      "pin_count": 10,
+      "pin_ids": [
+        "mine-01",
+        "mine-02",
+        "mine-03",
+        "mine-04",
+        "mine-05",
+        "mine-06",
+        "mine-07",
+        "mine-08",
+        "mine-09",
+        "mine-10"
+      ],
+      "render": "heatmap",
+      "heatmap_note": "Weekly rotator: copper/lithium/cobalt belts as resource heat, not mine icons."
+    }
+  ],
+  "rotation_12_weeks": [
+    {
+      "week_start": "2026-10-20",
+      "week_end": "2026-10-26",
+      "featured_category": "Semiconductor Mega-Fabs",
+      "featured_hook": "Chip plants that power every phone, car, and AI rack.",
+      "evergreen_spotlight": [
+        "Global Superports",
+        "Hyperscale Data Centers",
+        "Mega-Factories"
+      ],
+      "fire_tv_prompt": "This week on the globe: Semiconductor Mega-Fabs. Sit back and skim the pins with the remote.",
+      "featured_render": "pin",
+      "evergreen_render": [
+        {
+          "category": "Global Superports",
+          "render": "pin"
+        },
+        {
+          "category": "Hyperscale Data Centers",
+          "render": "heatmap"
+        },
+        {
+          "category": "Mega-Factories",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-10-27",
+      "week_end": "2026-11-02",
+      "featured_category": "Battery Gigafactories",
+      "featured_hook": "The factories filling the world's EVs and grid storage.",
+      "evergreen_spotlight": [
+        "Spaceports & Launch Sites",
+        "Mega-Stadiums",
+        "Largest Solar Farms"
+      ],
+      "fire_tv_prompt": "This week on the globe: Battery Gigafactories as a heat map. Watch the hot zones light up, then click a hotspot for the stat card.",
+      "featured_render": "heatmap",
+      "evergreen_render": [
+        {
+          "category": "Spaceports & Launch Sites",
+          "render": "pin"
+        },
+        {
+          "category": "Mega-Stadiums",
+          "render": "pin"
+        },
+        {
+          "category": "Largest Solar Farms",
+          "render": "heatmap"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-11-03",
+      "week_end": "2026-11-09",
+      "featured_category": "LNG Export Terminals",
+      "featured_hook": "Where natural gas becomes ships of energy for the world.",
+      "evergreen_spotlight": [
+        "Nuclear Power Plants",
+        "Oil Refineries",
+        "Global Air Cargo Hubs"
+      ],
+      "fire_tv_prompt": "This week on the globe: LNG Export Terminals. Sit back and skim the pins with the remote.",
+      "featured_render": "pin",
+      "evergreen_render": [
+        {
+          "category": "Nuclear Power Plants",
+          "render": "pin"
+        },
+        {
+          "category": "Oil Refineries",
+          "render": "pin"
+        },
+        {
+          "category": "Global Air Cargo Hubs",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-11-10",
+      "week_end": "2026-11-16",
+      "featured_category": "Global Stock Exchanges",
+      "featured_hook": "Trading floors and matching engines that move global capital.",
+      "evergreen_spotlight": [
+        "Tallest Skyscrapers",
+        "Mega-Factories",
+        "Busiest Airports"
+      ],
+      "fire_tv_prompt": "This week on the globe: Global Stock Exchanges. Sit back and skim the pins with the remote.",
+      "featured_render": "pin",
+      "evergreen_render": [
+        {
+          "category": "Tallest Skyscrapers",
+          "render": "pin"
+        },
+        {
+          "category": "Mega-Factories",
+          "render": "pin"
+        },
+        {
+          "category": "Busiest Airports",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-11-17",
+      "week_end": "2026-11-23",
+      "featured_category": "Critical Mineral Mines",
+      "featured_hook": "The pits and shafts behind EVs, turbines, and defense tech.",
+      "evergreen_spotlight": [
+        "Underwater Internet Cables",
+        "Largest Solar Farms",
+        "Global Superports"
+      ],
+      "fire_tv_prompt": "This week on the globe: Critical Mineral Mines as a heat map. Watch the hot zones light up, then click a hotspot for the stat card.",
+      "featured_render": "heatmap",
+      "evergreen_render": [
+        {
+          "category": "Underwater Internet Cables",
+          "render": "pin"
+        },
+        {
+          "category": "Largest Solar Farms",
+          "render": "heatmap"
+        },
+        {
+          "category": "Global Superports",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-11-24",
+      "week_end": "2026-11-30",
+      "featured_category": "Semiconductor Mega-Fabs",
+      "featured_hook": "Chip plants that power every phone, car, and AI rack.",
+      "evergreen_spotlight": [
+        "Largest Wind Farms",
+        "Global Air Cargo Hubs",
+        "Spaceports & Launch Sites"
+      ],
+      "fire_tv_prompt": "This week on the globe: Semiconductor Mega-Fabs. Sit back and skim the pins with the remote.",
+      "featured_render": "pin",
+      "evergreen_render": [
+        {
+          "category": "Largest Wind Farms",
+          "render": "heatmap"
+        },
+        {
+          "category": "Global Air Cargo Hubs",
+          "render": "pin"
+        },
+        {
+          "category": "Spaceports & Launch Sites",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-12-01",
+      "week_end": "2026-12-07",
+      "featured_category": "Battery Gigafactories",
+      "featured_hook": "The factories filling the world's EVs and grid storage.",
+      "evergreen_spotlight": [
+        "Major Dams & Hydroelectric",
+        "Busiest Airports",
+        "Nuclear Power Plants"
+      ],
+      "fire_tv_prompt": "This week on the globe: Battery Gigafactories as a heat map. Watch the hot zones light up, then click a hotspot for the stat card.",
+      "featured_render": "heatmap",
+      "evergreen_render": [
+        {
+          "category": "Major Dams & Hydroelectric",
+          "render": "pin"
+        },
+        {
+          "category": "Busiest Airports",
+          "render": "pin"
+        },
+        {
+          "category": "Nuclear Power Plants",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-12-08",
+      "week_end": "2026-12-14",
+      "featured_category": "LNG Export Terminals",
+      "featured_hook": "Where natural gas becomes ships of energy for the world.",
+      "evergreen_spotlight": [
+        "Military Bases",
+        "Global Superports",
+        "Tallest Skyscrapers"
+      ],
+      "fire_tv_prompt": "This week on the globe: LNG Export Terminals. Sit back and skim the pins with the remote.",
+      "featured_render": "pin",
+      "evergreen_render": [
+        {
+          "category": "Military Bases",
+          "render": "pin"
+        },
+        {
+          "category": "Global Superports",
+          "render": "pin"
+        },
+        {
+          "category": "Tallest Skyscrapers",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-12-15",
+      "week_end": "2026-12-21",
+      "featured_category": "Global Stock Exchanges",
+      "featured_hook": "Trading floors and matching engines that move global capital.",
+      "evergreen_spotlight": [
+        "Hyperscale Data Centers",
+        "Spaceports & Launch Sites",
+        "Underwater Internet Cables"
+      ],
+      "fire_tv_prompt": "This week on the globe: Global Stock Exchanges. Sit back and skim the pins with the remote.",
+      "featured_render": "pin",
+      "evergreen_render": [
+        {
+          "category": "Hyperscale Data Centers",
+          "render": "heatmap"
+        },
+        {
+          "category": "Spaceports & Launch Sites",
+          "render": "pin"
+        },
+        {
+          "category": "Underwater Internet Cables",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-12-22",
+      "week_end": "2026-12-28",
+      "featured_category": "Critical Mineral Mines",
+      "featured_hook": "The pits and shafts behind EVs, turbines, and defense tech.",
+      "evergreen_spotlight": [
+        "Mega-Stadiums",
+        "Nuclear Power Plants",
+        "Largest Wind Farms"
+      ],
+      "fire_tv_prompt": "This week on the globe: Critical Mineral Mines as a heat map. Watch the hot zones light up, then click a hotspot for the stat card.",
+      "featured_render": "heatmap",
+      "evergreen_render": [
+        {
+          "category": "Mega-Stadiums",
+          "render": "pin"
+        },
+        {
+          "category": "Nuclear Power Plants",
+          "render": "pin"
+        },
+        {
+          "category": "Largest Wind Farms",
+          "render": "heatmap"
+        }
+      ]
+    },
+    {
+      "week_start": "2026-12-29",
+      "week_end": "2027-01-04",
+      "featured_category": "Semiconductor Mega-Fabs",
+      "featured_hook": "Chip plants that power every phone, car, and AI rack.",
+      "evergreen_spotlight": [
+        "Oil Refineries",
+        "Tallest Skyscrapers",
+        "Major Dams & Hydroelectric"
+      ],
+      "fire_tv_prompt": "This week on the globe: Semiconductor Mega-Fabs. Sit back and skim the pins with the remote.",
+      "featured_render": "pin",
+      "evergreen_render": [
+        {
+          "category": "Oil Refineries",
+          "render": "pin"
+        },
+        {
+          "category": "Tallest Skyscrapers",
+          "render": "pin"
+        },
+        {
+          "category": "Major Dams & Hydroelectric",
+          "render": "pin"
+        }
+      ]
+    },
+    {
+      "week_start": "2027-01-05",
+      "week_end": "2027-01-11",
+      "featured_category": "Battery Gigafactories",
+      "featured_hook": "The factories filling the world's EVs and grid storage.",
+      "evergreen_spotlight": [
+        "Mega-Factories",
+        "Underwater Internet Cables",
+        "Military Bases"
+      ],
+      "fire_tv_prompt": "This week on the globe: Battery Gigafactories as a heat map. Watch the hot zones light up, then click a hotspot for the stat card.",
+      "featured_render": "heatmap",
+      "evergreen_render": [
+        {
+          "category": "Mega-Factories",
+          "render": "pin"
+        },
+        {
+          "category": "Underwater Internet Cables",
+          "render": "pin"
+        },
+        {
+          "category": "Military Bases",
+          "render": "pin"
+        }
+      ]
+    }
+  ]
+}
