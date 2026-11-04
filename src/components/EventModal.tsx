@@ -81,13 +81,10 @@ export const EventModal: React.FC<EventModalProps> = ({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="w-full flex flex-col items-center justify-center pt-2.5 pb-1 cursor-pointer group select-none hover:bg-slate-900/40 transition-colors shrink-0"
+        className="w-full flex flex-col items-center justify-center pt-2.5 pb-1.5 cursor-pointer group select-none hover:bg-slate-900/40 transition-colors shrink-0"
         title="Tap handle to close"
       >
         <div className="w-14 h-1.5 rounded-full bg-slate-500 group-hover:bg-cyan-400 group-hover:w-16 transition-all duration-200 shadow-sm" />
-        <span className="text-[9px] text-slate-500 group-hover:text-cyan-300 tracking-wider uppercase mt-1 font-medium transition-colors">
-          Slide down to close
-        </span>
       </div>
 
       {/* 2. ID Card Details (no picture, compact layout matching Street View slide-up) */}

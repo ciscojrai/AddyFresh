@@ -53,19 +53,16 @@ export const StreetViewPanel: React.FC<StreetViewPanelProps> = ({ target, onClos
       aria-label="Street View Panel"
       className="app-streetview absolute bottom-0 left-0 right-0 z-50 h-[58%] min-h-[270px] max-h-[380px] bg-[#070c18] border-t-2 border-cyan-400/90 rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.9),0_0_25px_rgba(34,211,238,0.25)] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
     >
-      {/* 1. Horizontal Handle in Center Top to Close (Direct requirement) */}
+      {/* 1. Horizontal Handle in Center Top to Close */}
       <div
         onClick={handleClose}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="w-full flex flex-col items-center justify-center pt-2.5 pb-1 cursor-pointer group select-none hover:bg-slate-900/40 transition-colors shrink-0"
+        className="w-full flex flex-col items-center justify-center pt-2.5 pb-1.5 cursor-pointer group select-none hover:bg-slate-900/40 transition-colors shrink-0"
         title="Tap handle to close Street View"
       >
         <div className="w-14 h-1.5 rounded-full bg-slate-500 group-hover:bg-cyan-400 group-hover:w-16 transition-all duration-200 shadow-sm" />
-        <span className="text-[9px] text-slate-500 group-hover:text-cyan-300 tracking-wider uppercase mt-1 font-medium transition-colors">
-          Slide down to close
-        </span>
       </div>
 
       {/* 2. Location Header Bar in direct center bottom panel */}
