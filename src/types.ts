@@ -1,5 +1,5 @@
 /**
- * Clean boilerplate types for AddySpace
+ * Clean boilerplate types for FreshAddy
  */
 
 export interface EventItem {

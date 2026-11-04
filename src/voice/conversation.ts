@@ -54,6 +54,8 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   let countdownTimer: ReturnType<typeof setInterval> | null = null;
   let deadline = 0;
   let turnToken = 0;
+  let committed = '';
+  let interimText = '';
   let muted = false;
   let microphoneReady = false;
   let priming = false;
@@ -162,18 +164,28 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     rec = new SR();
     rec.lang = 'en-US';
     rec.continuous = false;
-    rec.interimResults = true;
+    // Final results only: interim results were the duplication source, and the
+    // session never shows interim text in the UI, so nothing is lost by this.
+    rec.interimResults = false;
 
-    // event.results is cumulative for the life of one recognizer, so only text from
-    // resultIndex onward is new. Iterating from 0 duplicates every earlier word.
+    // Interim results repeat with a growing transcript, so appending each one
+    // duplicates words ("New" + "New York" + "New York City" ...). Interim
+    // replaces, final appends once. Buffer is the full current transcript.
     rec.onresult = (event: any) => {
       const start = typeof event.resultIndex === 'number' ? event.resultIndex : 0;
-      let fresh = '';
+      let freshFinal = '';
+      let freshInterim = '';
       for (let i = start; i < event.results.length; i++) {
-        fresh += ` ${event.results[i][0].transcript}`;
+        if (event.results[i].isFinal) freshFinal += ` ${event.results[i][0].transcript}`;
+        else freshInterim = event.results[i][0].transcript;
       }
-      const chunk = fresh.trim();
-      if (chunk) buffer = normalize(`${buffer} ${chunk}`);
+      if (freshFinal) {
+        committed = normalize(`${committed} ${freshFinal}`);
+        interimText = freshInterim;
+      } else if (freshInterim) {
+        interimText = freshInterim;
+      }
+      buffer = normalize(`${committed} ${interimText}`);
       clearSilence();
       if (buffer) silenceTimer = setTimeout(() => submit(buffer), silenceMs);
     };
@@ -211,6 +223,8 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   async function submit(transcript: string) {
     const text = transcript.trim();
     buffer = '';
+    committed = '';
+    interimText = '';
     clearSilence();
     if (!text || state === 'closed') return;
     if (state === 'thinking') return;
@@ -267,6 +281,8 @@ export function createVoiceSession(options: VoiceSessionOptions) {
       return;
     }
     buffer = '';
+    committed = '';
+    interimText = '';
     muted = false;
     emit('listening', 0);
     arm();
@@ -279,6 +295,8 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     clearSilence();
     stopRecognizer();
     buffer = '';
+    committed = '';
+    interimText = '';
     muted = false;
     emit('closed', 0);
   }

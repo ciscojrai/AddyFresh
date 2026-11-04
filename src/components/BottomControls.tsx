@@ -1,5 +1,4 @@
 import { ActiveNav } from '../types';
-import { VoiceButton } from './VoiceButton';
 import type { SessionState } from '../voice/conversation';
 import {
   Check,
@@ -38,8 +37,6 @@ export const BottomControls: React.FC<BottomControlsProps> = ({
   voiceState = 'closed',
   voiceEngineLabel = null,
   voiceEngineReason = null,
-  voiceSecondsLeft = 0,
-  onToggleVoice,
 }) => {
   return (
     <footer aria-label="Application Controls" className="w-full bg-[#05070e] border-t border-slate-900 px-4 py-2 flex flex-col gap-2 shrink-0 select-none z-30">
@@ -84,7 +81,7 @@ export const BottomControls: React.FC<BottomControlsProps> = ({
           <Search size={20} className="stroke-[2.2]" />
         </button>
 
-        {/* Chat */}
+        {/* Chat: tap goes to the chat list, as in the mockup */}
         <button
           onClick={() => onNavChange('chat')}
           className={`relative p-2.5 rounded-full transition-all duration-200 cursor-pointer ${
@@ -96,16 +93,6 @@ export const BottomControls: React.FC<BottomControlsProps> = ({
         >
           <MessageSquare size={20} className="stroke-[2.2]" />
         </button>
-
-        {/* Voice: spoken conversation, immediately right of the chat icon */}
-        {onToggleVoice && (
-          <VoiceButton
-            variant="nav"
-            state={voiceState}
-            secondsLeft={voiceSecondsLeft}
-            onToggle={onToggleVoice}
-          />
-        )}
 
         {/* Heart / Liked */}
         <button

@@ -23,9 +23,10 @@ import { addEventPinsToMap } from './mapPins.js';
 import { flyCameraToCoordinate } from './cameraFlyer.js';
 import { initMapLibreWorker } from './maplibreWorker.ts';
 import { GoogleMap3DView } from './components/GoogleMap3DView';
+import { GlobeActivitiesMenu } from './components/GlobeActivitiesMenu';
 import { ChevronUp, Smartphone, Tablet, Tv, Globe, ArrowLeftRight, ArrowUpDown, ArrowDown, ArrowUp, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useHaptic } from './hooks/useHaptic';
-import { speakWithAddyVoice } from './utils/metaVoice';
+import { speakWithAddyVoice, stopAddyVoicePlayback } from './utils/metaVoice';
 import { useVoiceSession } from './hooks/useVoiceSession';
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
@@ -58,7 +59,7 @@ const INITIAL_CONVERSATIONS: ChatConversation[] = [
       {
         id: 'm1-2',
         sender: 'assistant',
-        text: 'Top recommendations in Tokyo:\n\n1. Cyberpunk Rooftop Rave at Roppongi Hills Mori Tower\n2. Contact Tokyo in Shibuya B2 for raw modular synthwave\n3. Womb Tokyo for multi-floor visual mapping\n\nClear night weather (18°C) currently reported on rain radar.',
+        text: 'Top recommendations in Tokyo:\n\n1. Cyberpunk Rooftop Rave at Roppongi Hills Mori Tower\n2. Tokyo / Shibuya B2 for raw modular synthwave\n3. Womb Tokyo for multi-floor visual mapping\n\nClear night weather (18°C) currently reported on rain radar.',
         timestamp: '10:15 PM',
       },
     ],
@@ -173,7 +174,7 @@ function generateAiResponse(query: string, events: EventItem[]): string {
   }
 
   if (q.includes('tokyo') || q.includes('japan')) {
-    return `Tokyo currently has several premier experiences tracked on the globe:\n\n• Cyberpunk Rooftop Rave (Roppongi Hills Mori Tower)\n• Neon Shibuya Underground Beats (Contact Tokyo / Shibuya B2)\n• Akihabara VR Retro Arcade & Tech Summit\n\nRain Radar status: Clear skies, 18°C. Camera perspective is calibrated for 3D orbital view.`;
+    return `Tokyo currently has several premier experiences tracked on the globe:\n\n• Cyberpunk Rooftop Rave (Roppongi Hills Mori Tower)\n• Neon Shibuya Underground Beats (Tokyo / Shibuya B2)\n• Akihabara VR Retro Arcade & Tech Summit\n\nRain Radar status: Clear skies, 18°C. Camera perspective is calibrated for 3D orbital view.`;
   }
 
   if (q.includes('music') || q.includes('techno') || q.includes('rave') || q.includes('berlin')) {
@@ -256,6 +257,13 @@ const TvArrowIcon = ({ className = 'w-[11px] h-[11px]' }: { className?: string }
   </svg>
 );
 
+const eventToStreetViewTarget = (event: EventItem): StreetViewTarget => ({
+  title: event.title,
+  location: `${event.venue ? `${event.venue}, ` : ''}${event.city}, ${event.country}`,
+  lat: event.lat,
+  lng: event.lng,
+});
+
 export default function App() {
   const { triggerPanelToggle, triggerGlobePin, triggerNav } = useHaptic();
 
@@ -266,11 +274,26 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
   const [inspectEvent, setInspectEvent] = useState<EventItem | null>(null);
-  const [streetViewTarget, setStreetViewTarget] = useState<StreetViewTarget | null>(null);
+  const [streetViewTarget, setStreetViewTarget] = useState<StreetViewTarget | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const eventId = params.get('event');
+        if (eventId) {
+          const found = EVENTS_DATA.find((e) => e.id === eventId);
+          if (found) return eventToStreetViewTarget(found);
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    return EVENTS_DATA.length > 0 ? eventToStreetViewTarget(EVENTS_DATA[0]) : null;
+  });
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(
     new Set(['ev-1', 'ev-3'])
   );
   const [isFeedCollapsed, setIsFeedCollapsed] = useState(false);
+  const [activeActivityPill, setActiveActivityPill] = useState<string | null>('Football');
 
   // DeepSeek-style Chat state
   const [conversations, setConversations] = useState<ChatConversation[]>(INITIAL_CONVERSATIONS);
@@ -391,11 +414,12 @@ export default function App() {
   }, [isFeedCollapsed, effectiveDeviceMode, globePosition]);
 
   // Reset swap when feed is explicitly collapsed so full globe view is consistent
-  useEffect(() => {
+  // (REMOVED: User requested that when collapse is triggered, panel strictly stays on its given side)
+  /* useEffect(() => {
     if (isFeedCollapsed && isSwapped) {
       setIsSwapped(false);
     }
-  }, [isFeedCollapsed, isSwapped]);
+  }, [isFeedCollapsed, isSwapped]); */
 
   // MapLibre map & Pins state
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -535,6 +559,7 @@ export default function App() {
         if (found) {
           setSelectedEvent(found);
           setInspectEvent(found);
+          setStreetViewTarget(eventToStreetViewTarget(found));
         }
       }
     } catch {
@@ -671,9 +696,34 @@ export default function App() {
   };
 
   // Chat conversation actions
-  // Only a voice conversation speaks. Typed searches stay silent. This holds the live
-  // session object so the chat handler can ask it directly, not a render-time snapshot.
-  const voiceSessionRef = useRef<{ isOpen: () => boolean } | null>(null);
+  // Two separate voice chats, each with its own speaker: globe (no log) and
+  // panel (with log). Typed searches stay silent; speaking is done by the
+  // voice wrapper that asked, not by the chat handler itself.
+  const [globeAudioOn, setGlobeAudioOn] = useState(true);
+  const [panelAudioOn, setPanelAudioOn] = useState(true);
+  const globeAudioOnRef = useRef(true);
+  const panelAudioOnRef = useRef(true);
+  const toggleGlobeAudio = () => {
+    globeAudioOnRef.current = !globeAudioOnRef.current;
+    setGlobeAudioOn(globeAudioOnRef.current);
+    if (!globeAudioOnRef.current) stopAddyVoicePlayback();
+  };
+  const togglePanelAudio = () => {
+    panelAudioOnRef.current = !panelAudioOnRef.current;
+    setPanelAudioOn(panelAudioOnRef.current);
+    if (!panelAudioOnRef.current) stopAddyVoicePlayback();
+  };
+  const applyMuseActions = (actions?: Array<{ type: string; lat?: number; lon?: number; enabled?: boolean }>) => {
+    (actions || []).forEach((a) => {
+      if (a.type === 'fly_to' && typeof a.lat === 'number' && typeof a.lon === 'number') {
+        flyCameraToCoordinate({ lat: a.lat, lng: a.lon, target: 'globe' });
+      } else if (a.type === 'toggle_radar') {
+        window.dispatchEvent(new CustomEvent('freshaddy:set-radar', { detail: { enabled: a.enabled !== false } }));
+      } else if (a.type === 'toggle_alerts') {
+        window.dispatchEvent(new CustomEvent('freshaddy:set-alerts', { detail: { enabled: a.enabled !== false } }));
+      }
+    });
+  };
 
   const handleSendMessageInChat = async (
     conversationId: string,
@@ -690,7 +740,7 @@ export default function App() {
     const pendingMsg = {
       id: assistantId,
       sender: 'assistant' as const,
-      text: 'Muse is thinking…',
+      text: 'Pagos is thinking…',
       timestamp: 'Just now',
     };
     let lastReply = '';
@@ -709,7 +759,17 @@ export default function App() {
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conversationId
-          ? { ...c, updatedAt: 'Just now', messages: [...c.messages, userMsg, pendingMsg] }
+          ? {
+              ...c,
+              updatedAt: 'Just now',
+              title:
+                c.messages.length === 0 || c.title === 'New Chat'
+                  ? messageText.length > 26
+                    ? `${messageText.slice(0, 26)}…`
+                    : messageText
+                  : c.title,
+              messages: [...c.messages, userMsg, pendingMsg],
+            }
           : c
       )
     );
@@ -744,21 +804,11 @@ export default function App() {
         return r.json();
       })
       .then((data: { text?: string; actions?: Array<{ type: string; lat?: number; lon?: number; enabled?: boolean }> }) => {
-        const replyText = data.text || 'Muse had no answer for that.';
+        const replyText = data.text || 'Pagos had no answer for that.';
         setAssistantText(replyText);
-        // Silent unless a voice session is genuinely open right now.
-        if (voiceSessionRef.current?.isOpen()) speakWithAddyVoice(replyText);
         lastReply = replyText;
         resolveReply(replyText);
-        (data.actions || []).forEach((a) => {
-          if (a.type === 'fly_to' && typeof a.lat === 'number' && typeof a.lon === 'number') {
-            flyCameraToCoordinate({ lat: a.lat, lng: a.lon, target: 'globe' });
-          } else if (a.type === 'toggle_radar') {
-            window.dispatchEvent(new CustomEvent('freshaddy:set-radar', { detail: { enabled: a.enabled !== false } }));
-          } else if (a.type === 'toggle_alerts') {
-            window.dispatchEvent(new CustomEvent('freshaddy:set-alerts', { detail: { enabled: a.enabled !== false } }));
-          }
-        });
+        applyMuseActions(data.actions);
       })
       .catch((err) => {
         console.warn('Muse chat unavailable, using local search:', err);
@@ -769,22 +819,61 @@ export default function App() {
       });
     // Resolves once the reply text exists, for a caller that needs the real answer.
     const spokeReply = lastReply ? Promise.resolve(lastReply) : replyReady;
-    return { reply: spokeReply, id: assistantId, placeholder: 'Muse is thinking…' };
+    return { reply: spokeReply, id: assistantId, placeholder: 'Pagos is thinking…' };
   };
 
-  // Voice conversation (Pagos): the globe button and the nav chip both drive this one
-  // session. Questions reuse the chat handler so the panel, the globe actions, and
-  // Saved all behave exactly as they do for typed messages.
-  const voice = useVoiceSession({
-    ask: (text) => {
+  // Globe voice: NO chat log. Asks Muse, flies the globe, speaks only if the
+  // globe speaker is on. Never touches conversations, never opens the panel.
+  const handleGlobeVoiceAsk = async (text: string): Promise<string> => {
+    try {
+      const r = await fetch('/api/muse/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          history: [],
+          events: events.slice(0, 12).map((e) => ({
+            title: e.title,
+            city: e.city,
+            date: e.date,
+            lat: e.lat,
+            lng: e.lng,
+          })),
+        }),
+      });
+      if (!r.ok) throw new Error(`muse ${r.status}`);
+      const data = await r.json();
+      const replyText = data.text || 'Pagos had no answer for that.';
+      applyMuseActions(data.actions);
+      if (globeAudioOnRef.current) speakWithAddyVoice(replyText);
+      return replyText;
+    } catch {
+      const local = `${generateAiResponse(text, events)}\n\nMuse offline - showing local results.`;
+      if (globeAudioOnRef.current) speakWithAddyVoice(local);
+      return local;
+    }
+  };
+  const globeVoice = useVoiceSession({ ask: handleGlobeVoiceAsk });
+  // Panel voice: WITH log. Asks via the panel chat handler, speaks only if the
+  // panel speaker is on. Typed panel messages stay silent.
+  const panelVoice = useVoiceSession({
+    ask: async (text) => {
       setActiveNav('chat');
-      // Wait for the real answer before the countdown starts, so the 30 seconds the user
-      // gets are all theirs: the clock never runs while Muse is still thinking.
-      return handleSendMessageInChat(voiceConversationRef.current, text).then((sent) => sent.reply);
+      const sent = await handleSendMessageInChat(voiceConversationRef.current, text);
+      const reply = await sent.reply;
+      if (panelAudioOnRef.current) speakWithAddyVoice(reply);
+      return reply;
     },
   });
-  // The chat handler reads this synchronously, so it must be set before the handler runs.
-  voiceSessionRef.current = voice;
+  // Only one voice chat active at a time.
+  const toggleGlobeVoice = () => {
+    if (!globeVoice.isOpen() && panelVoice.isOpen()) panelVoice.toggle();
+    globeVoice.toggle();
+  };
+  const togglePanelVoice = () => {
+    if (!panelVoice.isOpen() && globeVoice.isOpen()) globeVoice.toggle();
+    panelVoice.toggle();
+  };
   // The chat conversation the voice session appends to: the open one, or the first.
   const voiceConversationRef = useRef<string>(
     conversations.find((c) => c.id === activeConversationId)?.id ?? conversations[0]?.id ?? ''
@@ -799,7 +888,7 @@ export default function App() {
       ? initialQuery.length > 26
         ? `${initialQuery.slice(0, 26)}…`
         : initialQuery
-      : 'Chat with Muse';
+      : 'New Chat';
     const newConv: ChatConversation = {
       id: convId,
       title: initialTitle,
@@ -816,18 +905,11 @@ export default function App() {
             {
               id: `msg-${Date.now()}-a`,
               sender: 'assistant',
-              text: 'Muse is thinking…',
+              text: 'Pagos is thinking…',
               timestamp: 'Just now',
             },
           ]
-        : [
-            {
-              id: `msg-${Date.now()}-a`,
-              sender: 'assistant',
-              text: 'Hello! I am Muse, your live AI guide inside FreshAddy. Ask me about music festivals, clubs, concerts, rain radar, or emergency alerts across the globe.',
-              timestamp: 'Just now',
-            },
-          ],
+        : [],
     };
 
     setConversations((prev) => [newConv, ...prev]);
@@ -878,13 +960,13 @@ export default function App() {
           ref={middleContainerRef}
           className="app-middle relative flex-1 min-h-0 w-full flex flex-col overflow-hidden"
         >
-          {/* 1. GLOBE & MAP — takes top ~40% of the screen OR expands to full/center screen when collapsed */}
+          {/* 1. GLOBE & MAP — fixed height/allocation, does NOT expand when panel collapses */}
           <section
             ref={globeSectionRef}
             aria-label="3D Interactive Globe and Map"
             data-swap-state={isSwapped ? 'swapped' : 'normal'}
             className={`app-globe relative w-full overflow-hidden touch-none bg-[#070c18] ${
-              isFeedCollapsed ? 'flex-1 h-full' : 'h-[40%] shrink-0'
+              effectiveDeviceMode === 'phone' ? 'h-[40%] shrink-0' : 'h-full flex-1'
             }`}
             style={{
               transform:
@@ -1013,9 +1095,15 @@ export default function App() {
                 radarActive={false}
                 perspective={'3D'}
                 themeMode={'dark'}
-                voiceState={voice.state}
-                voiceSecondsLeft={voice.secondsLeft}
-                onToggleVoice={voice.toggle}
+                voiceState={globeVoice.state}
+                voiceSecondsLeft={globeVoice.secondsLeft}
+                onToggleVoice={toggleGlobeVoice}
+                audioOn={globeAudioOn}
+                onToggleAudio={toggleGlobeAudio}
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                onSendMessage={handleSendMessageInChat}
+                onNewChat={handleNewChat}
               />
             </div>
 
@@ -1035,20 +1123,22 @@ export default function App() {
           <section
             ref={cardSectionRef}
             aria-label="Section Content Panel"
-            className={`app-feed relative w-full flex flex-col bg-slate-950 border-x-2 border-t-2 rounded-t-2xl shadow-2xl ${
+            className={`app-feed relative w-full flex flex-col ${
               isFeedCollapsed
-                ? 'shrink-0 cursor-pointer'
-                : 'flex-1 min-h-0 overflow-hidden'
-            } ${
-              activeNav === 'home'
+                ? 'bg-[#030712] border-x border-t border-cyan-500/30 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.85)]'
+                : 'bg-slate-950 border-x-2 border-t-2 rounded-t-2xl shadow-2xl'
+            } flex-1 min-h-0 overflow-hidden ${
+              !isFeedCollapsed && activeNav === 'home'
                 ? 'border-purple-500 shadow-[inset_0_0_18px_rgba(168,85,247,0.35),0_0_24px_rgba(168,85,247,0.3)]'
-                : activeNav === 'play'
+                : !isFeedCollapsed && activeNav === 'play'
                 ? 'border-yellow-400 shadow-[inset_0_0_20px_rgba(250,204,21,0.4),0_0_28px_rgba(250,204,21,0.35)]'
-                : activeNav === 'search'
+                : !isFeedCollapsed && activeNav === 'search'
                 ? 'border-emerald-400 shadow-[inset_0_0_18px_rgba(52,211,153,0.35),0_0_24px_rgba(52,211,153,0.3)]'
-                : activeNav === 'chat'
+                : !isFeedCollapsed && activeNav === 'chat'
                 ? 'border-cyan-400 shadow-[inset_0_0_18px_rgba(34,211,238,0.35),0_0_24px_rgba(34,211,238,0.3)]'
-                : 'border-rose-500 shadow-[inset_0_0_20px_rgba(244,63,94,0.4),0_0_28px_rgba(244,63,94,0.35)]'
+                : !isFeedCollapsed
+                ? 'border-rose-500 shadow-[inset_0_0_20px_rgba(244,63,94,0.4),0_0_28px_rgba(244,63,94,0.35)]'
+                : ''
             }`}
             style={{
               transform:
@@ -1066,24 +1156,62 @@ export default function App() {
                 setIsFeedCollapsed((prev) => !prev);
               }}
               className={`w-full flex flex-col items-center justify-center ${
-                isFeedCollapsed ? 'py-1' : 'pt-2 pb-1'
-              } cursor-pointer group hover:bg-slate-900/60 select-none shrink-0`}
-              title={isFeedCollapsed ? 'Expand Feed' : 'Collapse Feed to Full Globe'}
+                isFeedCollapsed ? 'pt-2 pb-1.5' : 'pt-2 pb-1'
+              } cursor-pointer group hover:bg-slate-900/40 select-none shrink-0 border-b ${
+                isFeedCollapsed ? 'border-cyan-500/20 bg-slate-950/70' : 'border-transparent'
+              }`}
+              title={isFeedCollapsed ? 'Expand Panel' : 'Collapse Panel Down'}
             >
-              {isFeedCollapsed && (
-                <ChevronUp size={12} className="text-slate-400 group-hover:text-cyan-300 -mb-0.5 animate-bounce" />
-              )}
               <div
                 className={`w-12 h-1.5 rounded-full transition-all duration-200 ${
                   isFeedCollapsed
-                    ? 'bg-slate-300 shadow-[0_0_8px_rgba(255,255,255,0.7)] group-hover:bg-white'
+                    ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.7)] group-hover:bg-white group-hover:w-16'
                     : 'bg-slate-600 group-hover:bg-slate-400'
                 }`}
               />
+              <span className="text-[9px] text-slate-400 group-hover:text-cyan-300 font-mono tracking-wider mt-1 uppercase">
+                {isFeedCollapsed ? '▾ Collapsed Down · Tap to Expand' : 'Slide down to collapse'}
+              </span>
             </div>
 
-            {/* Feed Content (shown when not collapsed) */}
-            {!isFeedCollapsed && (
+            {/* Collapsed Scene: Matching Globe Starfield Deep Space Background with 5 Activity Rows */}
+            {isFeedCollapsed ? (
+              <div className="relative flex-1 min-h-0 w-full overflow-hidden flex flex-col bg-radial from-slate-950/60 via-[#030712] to-[#010409]">
+                {/* Subtle starlight texture overlay to match the globe scene seamlessly */}
+                <div
+                  className="absolute inset-0 pointer-events-none opacity-40"
+                  style={{
+                    backgroundImage: `radial-gradient(1px 1px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+                                      radial-gradient(1.2px 1.2px at 90px 40px, #38bdf8, rgba(0,0,0,0)),
+                                      radial-gradient(1px 1px at 150px 120px, #ffffff, rgba(0,0,0,0)),
+                                      radial-gradient(1.5px 1.5px at 260px 80px, #93c5fd, rgba(0,0,0,0)),
+                                      radial-gradient(1px 1px at 320px 180px, #ffffff, rgba(0,0,0,0)),
+                                      radial-gradient(1px 1px at 70px 220px, #67e8f9, rgba(0,0,0,0)),
+                                      radial-gradient(1.2px 1.2px at 210px 270px, #ffffff, rgba(0,0,0,0))`,
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: '360px 320px',
+                  }}
+                />
+
+                <GlobeActivitiesMenu
+                  activePill={activeActivityPill}
+                  onSelectPill={(pill, cat) => {
+                    triggerPanelToggle();
+                    setActiveActivityPill(pill);
+                    // Filter or shift view on globe based on selection
+                    const matchedEvent = events.find(
+                      (e) =>
+                        e.title.toLowerCase().includes(pill.toLowerCase()) ||
+                        e.category.toLowerCase().includes(pill.toLowerCase()) ||
+                        e.tags.some((t) => t.toLowerCase().includes(pill.toLowerCase()))
+                    );
+                    if (matchedEvent) {
+                      handleSelectEvent(matchedEvent);
+                    }
+                  }}
+                />
+              </div>
+            ) : (
               <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
                 {/* Home Icon: Infinite scrolling feed of ID cards */}
                 {activeNav === 'home' && (
@@ -1127,6 +1255,12 @@ export default function App() {
                     onDeleteConversation={handleDeleteConversation}
                     onRenameConversation={handleRenameConversation}
                     events={events}
+                    voiceState={panelVoice.state}
+                    voiceSecondsLeft={panelVoice.secondsLeft}
+                    onToggleVoice={togglePanelVoice}
+                    audioOn={panelAudioOn}
+                    onToggleAudio={togglePanelAudio}
+                    onBackFromChat={() => setActiveNav('home')}
                   />
                 )}
 
@@ -1147,16 +1281,17 @@ export default function App() {
             {/* 3. BOTTOM CONTROLS (Moves with section area so it sits below feed when swapped to top) */}
             <div className="app-controls shrink-0">
               <BottomControls
-                voiceState={voice.state}
-                voiceSecondsLeft={voice.secondsLeft}
-                onToggleVoice={voice.toggle}
-                voiceEngineLabel={voice.voiceReport?.label ?? null}
-                voiceEngineReason={voice.voiceReport?.reason ?? null}
+                voiceState={panelVoice.state}
+                voiceSecondsLeft={panelVoice.secondsLeft}
+                onToggleVoice={togglePanelVoice}
+                voiceEngineLabel={panelVoice.voiceReport?.label ?? null}
+                voiceEngineReason={panelVoice.voiceReport?.reason ?? null}
                 activeNav={activeNav}
                 onNavChange={(nav) => {
                   triggerNav();
                   setActiveNav(nav);
                   setIsFeedCollapsed(false);
+                  if (nav === 'chat') setActiveConversationId(null);
                 }}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}

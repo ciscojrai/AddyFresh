@@ -47,7 +47,7 @@ export const EVENTS_DATA: EventItem[] = [
     date: 'Tonight · Live Now',
     category: 'Electronic & Synth',
     tags: ['#Trending', '#electric'],
-    venue: 'Contact Tokyo / Shibuya B2',
+    venue: 'Tokyo / Shibuya B2',
     lat: 35.6580,
     lng: 139.7016,
     image: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?auto=format&fit=crop&w=800&q=80',

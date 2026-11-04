@@ -12,9 +12,14 @@ import {
   ArrowLeft,
   Plus,
   Mic,
+  Search,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { safeShare } from '../utils/share';
 import { startMetaVoiceCapture, MetaVoiceCaptureHandle } from '../utils/metaVoice';
+import PagosPop from './PagosPop';
+import type { SessionState } from '../voice/conversation';
 
 export interface ChatMessage {
   id: string;
@@ -41,6 +46,15 @@ interface ChatViewProps {
   onDeleteConversation: (id: string) => void;
   onRenameConversation: (id: string, newTitle: string) => void;
   events: EventItem[];
+  /** Continuous duplex voice session state, shown on the chat drawer trigger. */
+  voiceState?: SessionState;
+  voiceSecondsLeft?: number;
+  onToggleVoice?: () => void;
+  /** Panel speaker, separate from the globe speaker. Audio on/off only. */
+  audioOn?: boolean;
+  onToggleAudio?: () => void;
+  /** Back action for the arrow that replaces New Chat in the list header. */
+  onBackFromChat?: () => void;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
@@ -52,9 +66,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onTogglePin,
   onDeleteConversation,
   onRenameConversation,
+  voiceState = 'closed',
+  voiceSecondsLeft = 0,
+  onToggleVoice,
+  audioOn = true,
+  onToggleAudio,
 }) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [inputVal, setInputVal] = useState('');
+  const [listSearch, setListSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitleVal, setEditTitleVal] = useState('');
 
@@ -80,18 +100,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const handleTogglePinned = (conv: ChatConversation) => {
-    const saved = readPinned().filter((id) => id !== conv.id);
-    if (!conv.pinned) saved.push(conv.id);
-    try {
-      localStorage.setItem(PIN_KEY, JSON.stringify(saved));
-    } catch {
-      /* storage unavailable: pin still works for this session */
-    }
-    onTogglePin(conv.id);
-  };
-
-  // --- Press-and-speak speech-to-text via Meta muse-voice-transcribe-1.0 (WAV 24kHz PCM + Web Speech interim preview) ---
+  // --- Tap-to-dictate speech-to-text via Meta muse-voice-transcribe-1.0 (WAV 24kHz PCM + Web Speech interim preview). Tap, never hold. ---
   const voiceSupported =
     typeof window !== 'undefined' &&
     Boolean(
@@ -103,8 +112,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
 
-  // Silence after speech before the turn is sent. Without this the transcript was sent
-  // on mic release, which cut people off the moment they paused.
+  // Silence after speech before dictation stops. Stopping keeps the transcript in
+  // the box for review; it does not send it on its own.
   const SILENCE_END_MS = 1800;
   const silenceEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearSilenceEnd = () => {
@@ -145,13 +154,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setTranscribing(true);
     try {
       const finalTranscript = await handle.stopAndTranscribe();
-      if (finalTranscript) {
-        setInputVal(finalTranscript);
-        if (activeConversationId) {
-          onSendMessage(activeConversationId, finalTranscript);
-          setInputVal('');
-        }
-      }
+      if (finalTranscript) setInputVal(finalTranscript);
     } catch {
       /* ignore */
     } finally {
@@ -178,6 +181,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
+    // While dictating, Send first stops the microphone and keeps the text
+    // in the box. Tap Send again to send it.
+    if (listening || captureRef.current) {
+      void stopListening();
+      return;
+    }
     if (!inputVal.trim() || !activeConversationId) return;
     onSendMessage(activeConversationId, inputVal.trim());
     setInputVal('');
@@ -201,27 +210,93 @@ export const ChatView: React.FC<ChatViewProps> = ({
   if (activeConv) {
     return (
       <div className="flex-1 w-full h-full flex flex-col bg-slate-950">
-        {/* Back arrow only (no header) */}
-        <div className="px-2 pt-1.5 shrink-0">
+        {/* Top bar, as in the mockup: highlighted ← Chats left (goes to chat list), + New Chat right only — no Pin, no voice at the top */}
+        <div className="px-2 pt-1.5 shrink-0 flex items-center justify-between">
           <button
             onClick={() => onSelectConversation(null)}
-            className="p-1 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer"
-            title="Back to conversation list"
-            aria-label="Back to conversation list"
+            className="flex items-center gap-1 p-1 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer"
+            title="Back to chats"
+            aria-label="Back to chats"
           >
             <ArrowLeft size={15} />
+            <span className="text-[11px] font-medium">Chats</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNewChat()}
+            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-medium cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
+            title="New chat"
+            aria-label="New chat"
+          >
+            <Plus size={12} />
+            <span>New Chat</span>
           </button>
         </div>
 
         {/* Message Thread */}
         <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 scrollbar-none">
-          {activeConv.messages.map((msg) => {
+          {activeConv.messages.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center px-6 text-center">
+              <div className="flex items-center gap-4">
+                <video
+                  src="/pagos.mp4"
+                  muted
+                  playsInline
+                  autoPlay
+                  loop
+                  aria-label="Pagos"
+                  className="w-44 h-44 object-cover rounded-2xl shrink-0"
+                />
+                {onToggleVoice && (
+                  <button
+                    type="button"
+                    onClick={onToggleVoice}
+                    aria-pressed={voiceState !== 'closed'}
+                    title={voiceState !== 'closed' ? 'End voice chat' : 'Start voice chat'}
+                    className={`inline-flex items-center gap-2 rounded-full border px-2 py-1 pr-3 text-[13px] font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                      voiceState !== 'closed'
+                        ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300'
+                        : 'border-cyan-400/60 text-cyan-300 hover:bg-cyan-500/10'
+                    }`}
+                  >
+                    <span className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 text-white">
+                      {voiceState === 'countdown' ? (
+                        <span className="text-[11px] font-bold tabular-nums">{voiceSecondsLeft}</span>
+                      ) : voiceState === 'thinking' ? (
+                        <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      ) : (
+                        <span className="flex items-end gap-[2px] h-4">
+                          {[0, 1, 2, 3].map((i) => (
+                            <span
+                              key={i}
+                              className={`voice-wave-bar ${voiceState === 'listening' ? 'voice-wave-bar--live' : 'voice-wave-bar--idle'}`}
+                              style={voiceState === 'listening' ? { animationDelay: `${i * 110}ms` } : undefined}
+                            />
+                          ))}
+                        </span>
+                      )}
+                    </span>
+                    {voiceState !== 'closed' ? 'End talk' : 'I have a Voice, Lets Chat'}
+                  </button>
+                )}
+              </div>
+              <p className="mt-4 text-[13px] leading-relaxed text-slate-200">
+                Hi, I’m Pagos, your live AI Discovery guide inside FreshAddy. Ask me about music festivals, clubs, concerts, rain radar, or emergency alerts across the globe.
+              </p>
+            </div>
+          )}
+          {activeConv.messages.map((msg, msgIdx) => {
             const isUser = msg.sender === 'user';
+            // MUSE version, copied: App posts a pending assistant message with
+            // this exact text while Pagos is thinking — that is the thinking
+            // state, so Pagos pops up next to it here, every trigger.
+            const isThinking = !isUser && msg.text === 'Pagos is thinking…';
             return (
               <div
                 key={msg.id}
                 className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
               >
+                {isThinking && <PagosPop variant="inline" show={true} />}
                 <div
                   className={`max-w-[85%] rounded-2xl px-3 py-2 text-[11px] leading-relaxed shadow-md ${
                     isUser
@@ -237,58 +312,37 @@ export const ChatView: React.FC<ChatViewProps> = ({
               </div>
             );
           })}
+
         </div>
 
-        {/* Message Input Bar: [+ New] [ pill input: pin, mic ] [send] */}
+        {/* Bottom search bar, as in images 2-3: search pill (mic inside, send inside at far right) [voice wave icon, stays outside right during the chat] — no conversations icon */}
         <form
           onSubmit={handleSend}
           className="p-2.5 bg-[#090e1c] border-t border-slate-800/80 flex items-center gap-2 shrink-0"
         >
-          <button
-            type="button"
-            onClick={() => onNewChat()}
-            className="flex items-center gap-1 h-10 px-3 rounded-full border border-slate-600 text-slate-300 text-[11px] font-medium hover:border-cyan-400 hover:text-cyan-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer shrink-0"
-            title="Start a new chat"
-          >
-            <Plus size={12} />
-            <span>New</span>
-          </button>
-
           <div className="relative flex-1 min-w-0">
             <input
               type="text"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
-              placeholder="Ask Muse..."
-              className="w-full h-10 bg-slate-900 border border-slate-700/80 rounded-full pl-4 pr-[5.25rem] text-[11px] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+              placeholder={listening ? 'Listening...' : 'Ask Pagos...'}
+              className="w-full h-10 bg-slate-900 border border-slate-700/80 rounded-full pl-4 pr-[5.5rem] text-[11px] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-400"
             />
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => handleTogglePinned(activeConv)}
-                aria-pressed={activeConv.pinned}
-                title={activeConv.pinned ? 'Unpin this chat' : 'Pin this chat'}
-                className={`w-9 h-9 rounded-full flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer ${
-                  activeConv.pinned ? 'text-cyan-400' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Pin size={15} className={activeConv.pinned ? 'fill-cyan-400' : ''} />
-              </button>
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
               {voiceSupported && (
                 <button
                   type="button"
                   data-listening={listening || transcribing ? 'true' : 'false'}
                   title={
                     listening
-                      ? 'Listening… tap again to finish'
+                      ? 'Listening… tap again to stop dictation'
                       : transcribing
                       ? 'Transcribing with Meta muse-voice-transcribe-1.0...'
-                      : 'Tap to speak (Meta Voice)'
+                      : 'Tap for dictation (Meta Voice)'
                   }
-                  aria-label="Tap to speak (Meta Voice)"
+                  aria-label="Tap for dictation (Meta Voice)"
                   onClick={() => {
-                    // Tap to start, tap to finish. The turn also ends on its own after a
-                    // pause, so a tap is only needed to begin or to cut it short.
+                    // Tap only, never hold. Tap to start, tap again to stop.
                     if (captureRef.current || listening) void stopListening();
                     else void startListening();
                   }}
@@ -301,7 +355,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   }}
                   className={`relative w-9 h-9 rounded-full flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 transition-colors cursor-pointer touch-none ${
                     listening
-                      ? 'text-white bg-blue-500/30 ring-2 ring-blue-400'
+                      ? 'text-cyan-300 bg-cyan-500/30 ring-2 ring-cyan-400'
                       : 'text-slate-400 hover:text-blue-300'
                   }`}
                 >
@@ -311,17 +365,59 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   )}
                 </button>
               )}
+              <button
+                type="submit"
+                disabled={transcribing || (!inputVal.trim() && !listening)}
+                className="w-8 h-8 rounded-full bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:hover:bg-cyan-500 text-slate-950 transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+                title={listening ? 'Stop microphone' : 'Send'}
+                aria-label={listening ? 'Stop microphone' : 'Send'}
+              >
+                <Send size={15} />
+              </button>
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={!inputVal.trim()}
-            className="p-2.5 rounded-full bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:hover:bg-cyan-500 text-slate-950 transition-colors cursor-pointer shrink-0"
-            title="Send"
-          >
-            <Send size={15} />
-          </button>
+          {onToggleVoice && (
+            <button
+              type="button"
+              onClick={onToggleVoice}
+              aria-pressed={voiceState !== 'closed'}
+              title={voiceState === 'countdown' ? `Listening: ${voiceSecondsLeft}s to reply` : voiceState !== 'closed' ? 'End voice chat' : 'Start voice chat'}
+              aria-label="Voice chat"
+              className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center shrink-0 cursor-pointer text-white"
+            >
+              {voiceState === 'countdown' ? (
+                <span className="text-[11px] font-bold tabular-nums">{voiceSecondsLeft}</span>
+              ) : voiceState === 'thinking' ? (
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <span className="flex items-end gap-[2px] h-4">
+                  {[0, 1, 2, 3].map((i) => (
+                    <span
+                      key={i}
+                      className={`voice-wave-bar ${voiceState === 'listening' ? 'voice-wave-bar--live' : 'voice-wave-bar--idle'}`}
+                      style={voiceState === 'listening' ? { animationDelay: `${i * 110}ms` } : undefined}
+                    />
+                  ))}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Panel speaker: audio on/off for the panel voice chat only, separate from globe. */}
+          {onToggleAudio && (
+            <button
+              type="button"
+              onClick={onToggleAudio}
+              title={audioOn ? 'Panel audio: On (tap to mute)' : 'Panel audio: Off (tap to unmute)'}
+              aria-label={audioOn ? 'Turn panel audio off' : 'Turn panel audio on'}
+              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 cursor-pointer text-white ${
+                audioOn ? 'bg-cyan-600' : 'bg-slate-700 text-slate-400'
+              }`}
+            >
+              {audioOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+          )}
         </form>
         <div className="bg-[#090e1c] text-center text-[9px] text-slate-600 pb-1 -mt-1 shrink-0 select-none">
           Powered by Meta Muse
@@ -349,7 +445,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         }}
         className="group relative flex items-center gap-3 rounded-xl px-2 py-2 cursor-pointer transition-colors hover:bg-slate-800/50 focus:outline-none focus-visible:bg-slate-800/60 focus-visible:ring-2 focus-visible:ring-cyan-400/70"
       >
-        {/* Name + one-line preview */}
+        {/* Title only, one line per item */}
         <div className="flex-1 min-w-0 pr-5">
           {editingId === conv.id ? (
             <input
@@ -368,7 +464,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
           ) : (
             <h4 className="text-[13px] font-bold text-white truncate leading-tight">{conv.title}</h4>
           )}
-          <p className="text-[11px] text-slate-400 truncate mt-0.5 leading-snug">{lastMsg}</p>
         </div>
 
         {/* Small, faint 3-dot menu: shown on hover / focus (always faintly visible on touch) */}
@@ -436,28 +531,46 @@ export const ChatView: React.FC<ChatViewProps> = ({
     );
   };
 
+  const listQuery = listSearch.trim().toLowerCase();
+  const matchesList = (conv: ChatConversation) =>
+    !listQuery || conv.title.toLowerCase().includes(listQuery);
   return (
     <div
       onClick={() => setOpenMenuId(null)}
       className="flex-1 w-full h-full overflow-y-auto px-2.5 py-3 space-y-3 scrollbar-none relative"
     >
+      {/* List top, as in the 01:01 screenshot: search box, + New Chat far right, no back arrow */}
+      <div className="flex items-center gap-2 px-1">
+        <div className="relative flex-1 min-w-0">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={listSearch}
+            onChange={(e) => setListSearch(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            placeholder="Search"
+            aria-label="Search chats"
+            className="w-full h-10 bg-slate-900 border border-slate-700/80 rounded-full pl-9 pr-3 text-[13px] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-400"
+          />
+        </div>
+        <button
+          onClick={() => onNewChat()}
+          className="flex items-center gap-1 text-[13px] text-cyan-400 hover:text-cyan-300 font-medium cursor-pointer rounded shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
+        >
+          <Plus size={14} />
+          <span>New Chat</span>
+        </button>
+      </div>
+
       {/* Pinned section */}
       <div>
-        <div className="flex items-center justify-between mb-1 px-2">
-          <div className="flex items-center gap-1.5 text-cyan-400 font-medium text-[11px] tracking-wide">
-            <Pin size={11} className="text-cyan-400" />
-            <span>Pinned</span>
-          </div>
-
-          <button
-            onClick={() => onNewChat()}
-            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-medium cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
-          >
-            <Plus size={12} />
-            <span>New Chat</span>
-          </button>
+        <div className="flex items-center gap-1.5 text-cyan-400 font-medium text-[13px] tracking-wide mb-1 px-2">
+          <Pin size={13} className="text-cyan-400" />
+          <span>Pinned</span>
         </div>
-        <div className="space-y-0.5">{pinnedConvs.map((conv) => renderRow(conv, true))}</div>
+        <div className="space-y-0.5">
+          {pinnedConvs.filter(matchesList).map((conv) => renderRow(conv, true))}
+        </div>
       </div>
 
       {/* Recents section */}
@@ -466,7 +579,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <MessageSquare size={11} className="text-cyan-400" />
           <span>Recents</span>
         </div>
-        <div className="space-y-0.5">{recentConvs.map((conv) => renderRow(conv, false))}</div>
+        <div className="space-y-0.5">
+          {recentConvs.filter(matchesList).map((conv) => renderRow(conv, false))}
+        </div>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
+import net from 'net';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
@@ -13,7 +14,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5173;
 
 app.use(express.json());
 
@@ -173,7 +173,7 @@ function loadMuseConfig() {
   };
 }
 
-const MUSE_SYSTEM_PROMPT = `You are Muse, the assistant inside FreshAddy, a 3D globe app for discovering live music, festivals, nightlife, weather radar, and GDACS/JTWC emergency alerts.
+const MUSE_SYSTEM_PROMPT = `You are Pagos, the friendly guide inside FreshAddy, a 3D globe app for discovering live music, festivals, nightlife, weather radar, and GDACS/JTWC emergency alerts.
 Keep answers short (1-3 sentences), friendly and concrete. Use the event list provided as context when it fits.
 When the user wants to see or go to a place, call the fly_to tool with that place's latitude, longitude and a short label.
 When the user asks to turn on/off rain radar or weather radar, call toggle_radar.
@@ -371,8 +371,42 @@ app.post('/api/voice/transcribe', async (req: Request, res: Response) => {
   }
 });
 
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const tester = net.createServer()
+      .once('error', () => resolve(false))
+      .once('listening', () => {
+        tester.close(() => resolve(true));
+      })
+      .listen(port, '0.0.0.0');
+  });
+}
+
+async function resolvePort(): Promise<number> {
+  if (process.env.PORT) {
+    return parseInt(process.env.PORT, 10);
+  }
+  const candidatePorts = [3010, 5173, 5174, 4000];
+  for (const p of candidatePorts) {
+    if (await isPortAvailable(p)) return p;
+  }
+  return 3010;
+}
+
+async function resolveHmrPort(): Promise<number> {
+  if (process.env.HMR_PORT) {
+    return parseInt(process.env.HMR_PORT, 10);
+  }
+  const candidateHmrPorts = [24678, 24679, 24680];
+  for (const p of candidateHmrPorts) {
+    if (await isPortAvailable(p)) return p;
+  }
+  return 24678;
+}
+
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
+  const port = await resolvePort();
 
   if (isProd) {
     app.use(express.static(path.resolve(__dirname, 'dist')));
@@ -380,15 +414,22 @@ async function startServer() {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   } else {
+    const hmrPort = await resolveHmrPort();
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: {
+          port: hmrPort,
+          clientPort: hmrPort,
+        },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${port}`);
   });
 }
 

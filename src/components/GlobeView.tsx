@@ -17,6 +17,8 @@ import {
   MousePointer2,
   CloudRain,
   TriangleAlert,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { haptic } from '../utils/haptics';
 import { initMapLibreWorker } from '../maplibreWorker';
@@ -41,6 +43,9 @@ interface GlobeViewProps {
   voiceState?: SessionState;
   voiceSecondsLeft?: number;
   onToggleVoice?: () => void;
+  /** Globe speaker, separate from the panel speaker. Audio on/off only. */
+  audioOn?: boolean;
+  onToggleAudio?: () => void;
   /** Optional inline conversational AI integration for God's Eye View */
   conversations?: any[];
   activeConversationId?: string | null;
@@ -128,6 +133,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   voiceState = 'closed',
   voiceSecondsLeft = 0,
   onToggleVoice,
+  audioOn = true,
+  onToggleAudio,
   conversations = [],
   activeConversationId,
   onSendMessage,
@@ -1730,6 +1737,20 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           />
         )}
 
+        {/* Globe speaker: audio on/off for the globe voice chat only, separate from panel. */}
+        {onToggleAudio && (
+          <button
+            type="button"
+            onClick={onToggleAudio}
+            title={audioOn ? 'Globe audio: On (tap to mute)' : 'Globe audio: Off (tap to unmute)'}
+            aria-label={audioOn ? 'Turn globe audio off' : 'Turn globe audio on'}
+            className={`w-9 h-9 rounded-full flex items-center justify-center border shadow-md transition-colors cursor-pointer ${
+              audioOn ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-slate-800 text-slate-400 border-slate-700'
+            }`}
+          >
+            {audioOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+        )}
         {/* 3-State Interactive Rain Radar Pill (Off -> 25% Dim Halfway -> 90% Bright Full) */}
         <button
           type="button"
