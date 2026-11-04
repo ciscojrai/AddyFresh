@@ -305,6 +305,22 @@ html, body, #root {
   padding: 6px 10px !important;
 }
 
+/* TV 10' Globe Tactical Pills: scale Alerts & Radar to match standard TV buttons */
+.app-shell[data-device="tv"] .app-globe-tactical-pill {
+  height: 48px !important;
+  padding: 0 16px !important;
+}
+
+.app-shell[data-device="tv"] .app-globe-tactical-pill .app-globe-pill-text {
+  font-size: 14px !important;
+  letter-spacing: 0.05em !important;
+}
+
+.app-shell[data-device="tv"] .app-globe-tactical-pill .app-globe-pill-icon {
+  width: 18px !important;
+  height: 18px !important;
+}
+
 .app-shell[data-device="tv"] button:focus-visible,
 .app-shell[data-device="tv"] input:focus-visible {
   outline: 2.5px solid #22d3ee !important;

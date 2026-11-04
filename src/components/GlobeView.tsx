@@ -1753,7 +1753,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           aria-label={`Emergency Alerts status: ${
             alertsState === 0 ? 'Off' : alertsState === 1 ? 'Pins Only' : 'Pins and Labels'
           }`}
-          className="relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
+          className="app-globe-tactical-pill relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
         >
           {/* Animated Left-to-Right Highlight Background */}
           <div
@@ -1767,14 +1767,14 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           <div className="relative z-10 flex items-center gap-1.5 pointer-events-none">
             <TriangleAlert
               size={12}
-              className={`transition-colors duration-300 ${
+              className={`app-globe-pill-icon transition-colors duration-300 ${
                 alertsState > 0
                   ? 'text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]'
                   : 'text-slate-400'
               }`}
             />
             <span
-              className={`font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
+              className={`app-globe-pill-text font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
                 alertsState > 0 ? 'text-amber-100' : 'text-slate-400'
               }`}
             >
@@ -1819,7 +1819,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           aria-label={`Radar status: ${
             radarState === 0 ? 'Off' : radarState === 1 ? '25% Dim' : '90% Bright'
           }`}
-          className="relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
+          className="app-globe-tactical-pill relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
         >
           {/* Animated Left-to-Right Highlight Background */}
           <div
@@ -1833,14 +1833,14 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           <div className="relative z-10 flex items-center gap-1.5 pointer-events-none">
             <CloudRain
               size={12}
-              className={`transition-colors duration-300 ${
+              className={`app-globe-pill-icon transition-colors duration-300 ${
                 radarState > 0
                   ? 'text-cyan-300 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]'
                   : 'text-slate-400'
               }`}
             />
             <span
-              className={`font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
+              className={`app-globe-pill-text font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
                 radarState > 0 ? 'text-cyan-200' : 'text-slate-400'
               }`}
             >
