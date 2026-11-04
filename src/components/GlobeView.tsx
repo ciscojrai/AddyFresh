@@ -1725,79 +1725,13 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </div>
       )}
 
-      {/* BOTTOM-LEFT: Rain Radar Pill with Alerts immediately to its right */}
+      {/* BOTTOM-LEFT: Alerts on top, Radar immediately below */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="absolute bottom-2.5 left-3 z-20 flex items-center gap-1.5 pointer-events-auto"
+        className="absolute bottom-2.5 left-3 z-20 flex flex-col items-start gap-1.5 pointer-events-auto"
       >
-        {/* 3-State Interactive Rain Radar Pill (Off -> 25% Dim Halfway -> 90% Bright Full) */}
-        <button
-          type="button"
-          onClick={() => {
-            haptic.globePinLight();
-            const next = ((radarState + 1) % 3) as 0 | 1 | 2;
-            if (next > 0) setEngineMode('maplibre');
-            setRadarState(next);
-            try {
-              localStorage.setItem('radar-state', String(next));
-            } catch {}
-          }}
-          title={
-            radarState === 0
-              ? 'Rain Radar: Off (Tap for Dim 25% Overlay)'
-              : radarState === 1
-              ? 'Rain Radar: Dim 25% (Tap for Bright 90% Overlay)'
-              : 'Rain Radar: Bright 90% (Tap to Turn Off)'
-          }
-          aria-label={`Rain Radar status: ${
-            radarState === 0 ? 'Off' : radarState === 1 ? '25% Dim' : '90% Bright'
-          }`}
-          className="relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
-        >
-          {/* Animated Left-to-Right Highlight Background */}
-          <div
-            className="absolute left-0 top-0 bottom-0 bg-cyan-500/25 border-r border-cyan-400/50 transition-all duration-300 pointer-events-none"
-            style={{
-              width: radarState === 1 ? '50%' : radarState === 2 ? '100%' : '0%',
-            }}
-          />
-
-          {/* Foreground Icon & Label */}
-          <div className="relative z-10 flex items-center gap-1.5 pointer-events-none">
-            <CloudRain
-              size={12}
-              className={`transition-colors duration-300 ${
-                radarState > 0
-                  ? 'text-cyan-300 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]'
-                  : 'text-slate-400'
-              }`}
-            />
-            <span
-              className={`font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
-                radarState > 0 ? 'text-cyan-200' : 'text-slate-400'
-              }`}
-            >
-              Rain Radar
-            </span>
-          </div>
-
-          {/* Tactical 2-Dot Meter Indicator on Right */}
-          <div className="relative z-10 ml-2 flex items-center gap-1 pointer-events-none">
-            <div
-              className={`w-1 h-1 rounded-full transition-all duration-300 ${
-                radarState >= 1 ? 'bg-cyan-400 shadow-[0_0_4px_#22d3ee]' : 'bg-slate-700'
-              }`}
-            />
-            <div
-              className={`w-1 h-1 rounded-full transition-all duration-300 ${
-                radarState === 2 ? 'bg-cyan-400 shadow-[0_0_4px_#22d3ee]' : 'bg-slate-700'
-              }`}
-            />
-          </div>
-        </button>
-
-        {/* 3-State Interactive Alerts Pill (Off -> Pins Only Halfway -> Pins + Labels Full) */}
+        {/* 3-State Interactive Alerts Pill (Top) */}
         <button
           type="button"
           onClick={() => {
@@ -1858,6 +1792,72 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             <div
               className={`w-1 h-1 rounded-full transition-all duration-300 ${
                 alertsState === 2 ? 'bg-amber-400 shadow-[0_0_4px_#f59e0b]' : 'bg-slate-700'
+              }`}
+            />
+          </div>
+        </button>
+
+        {/* 3-State Interactive Radar Pill (Bottom, word 'Rain' removed) */}
+        <button
+          type="button"
+          onClick={() => {
+            haptic.globePinLight();
+            const next = ((radarState + 1) % 3) as 0 | 1 | 2;
+            if (next > 0) setEngineMode('maplibre');
+            setRadarState(next);
+            try {
+              localStorage.setItem('radar-state', String(next));
+            } catch {}
+          }}
+          title={
+            radarState === 0
+              ? 'Radar: Off (Tap for Dim 25% Overlay)'
+              : radarState === 1
+              ? 'Radar: Dim 25% (Tap for Bright 90% Overlay)'
+              : 'Radar: Bright 90% (Tap to Turn Off)'
+          }
+          aria-label={`Radar status: ${
+            radarState === 0 ? 'Off' : radarState === 1 ? '25% Dim' : '90% Bright'
+          }`}
+          className="relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
+        >
+          {/* Animated Left-to-Right Highlight Background */}
+          <div
+            className="absolute left-0 top-0 bottom-0 bg-cyan-500/25 border-r border-cyan-400/50 transition-all duration-300 pointer-events-none"
+            style={{
+              width: radarState === 1 ? '50%' : radarState === 2 ? '100%' : '0%',
+            }}
+          />
+
+          {/* Foreground Icon & Label */}
+          <div className="relative z-10 flex items-center gap-1.5 pointer-events-none">
+            <CloudRain
+              size={12}
+              className={`transition-colors duration-300 ${
+                radarState > 0
+                  ? 'text-cyan-300 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]'
+                  : 'text-slate-400'
+              }`}
+            />
+            <span
+              className={`font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
+                radarState > 0 ? 'text-cyan-200' : 'text-slate-400'
+              }`}
+            >
+              Radar
+            </span>
+          </div>
+
+          {/* Tactical 2-Dot Meter Indicator on Right */}
+          <div className="relative z-10 ml-2 flex items-center gap-1 pointer-events-none">
+            <div
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                radarState >= 1 ? 'bg-cyan-400 shadow-[0_0_4px_#22d3ee]' : 'bg-slate-700'
+              }`}
+            />
+            <div
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                radarState === 2 ? 'bg-cyan-400 shadow-[0_0_4px_#22d3ee]' : 'bg-slate-700'
               }`}
             />
           </div>
