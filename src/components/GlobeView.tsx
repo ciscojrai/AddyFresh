@@ -131,7 +131,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const cesiumViewerRef = useRef<any>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
-  const autoRotateRef = useRef<boolean>(true);
+  const autoRotateRef = useRef<boolean>(false);
   const isUserInteractingRef = useRef<boolean>(false);
 
   const envMeta = (import.meta as any).env || {};
@@ -155,7 +155,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   );
   const [cesiumReady, setCesiumReady] = useState<boolean>(false);
 
-  const [autoRotate, setAutoRotate] = useState(true);
+  const [autoRotate, setAutoRotate] = useState(false);
   const [radarOn, setRadarOn] = useState<boolean>(() => Boolean(radarActive));
   const [radarOpacity, setRadarOpacity] = useState<number>(() => {
     try {
@@ -467,7 +467,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       const accent = isSelected ? '#38bdf8' : activeMood.color || '#22d3ee';
       const cleanTitle = ev.title.length > 22 ? ev.title.slice(0, 21) + '…' : ev.title;
 
-      // Event Pin Billboard + Clean Title Label (Selected is high-visibility 48x48 cyan radar beacon)
+      // Event Pin Billboard (Labels removed per user instruction)
       const pinEntity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 35),
         billboard: {
@@ -475,25 +475,6 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           width: isSelected ? 48 : 24,
           height: isSelected ? 48 : 24,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
-        label: {
-          text: `  ${cleanTitle}  `,
-          font: isSelected
-            ? 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            : '600 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          fillColor: Cesium.Color.fromCssColorString(isSelected ? '#38bdf8' : '#ffffff'),
-          outlineColor: Cesium.Color.fromCssColorString('#020617'),
-          outlineWidth: isSelected ? 4 : 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          showBackground: true,
-          backgroundColor: Cesium.Color.fromCssColorString(
-            isSelected ? '#031024' : '#0f172a'
-          ).withAlpha(0.95),
-          backgroundPadding: isSelected
-            ? new Cesium.Cartesian2(10, 6)
-            : new Cesium.Cartesian2(7, 4),
-          pixelOffset: new Cesium.Cartesian2(0, isSelected ? -30 : -22),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
@@ -777,26 +758,6 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         z-index: ${isSelected ? 45 : 20};
       `;
 
-      const displayTitle =
-        ev.title.length > 22 ? ev.title.slice(0, 21) + '…' : ev.title;
-      const tag = document.createElement('div');
-      tag.style.cssText = `
-        margin-bottom: 4px;
-        padding: 3px 8px;
-        background: rgba(15, 23, 42, 0.92);
-        border: 1px solid ${isSelected ? '#38bdf8' : 'rgba(148, 163, 184, 0.35)'};
-        border-radius: 9999px;
-        color: ${isSelected ? '#38bdf8' : '#f8fafc'};
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(6px);
-        transition: all 0.2s ease;
-      `;
-      tag.textContent = displayTitle;
-
       const pinDot = document.createElement('div');
       const dotSize = isSelected ? 16 : 12;
       pinDot.style.cssText = `
@@ -809,7 +770,6 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         transition: transform 0.2s ease;
       `;
 
-      wrapper.appendChild(tag);
       wrapper.appendChild(pinDot);
 
       wrapper.addEventListener('click', (e) => {
