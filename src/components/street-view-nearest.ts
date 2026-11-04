@@ -121,11 +121,12 @@ async function queryBox(
   fetchImpl: typeof fetch,
 ): Promise<Candidate[] | null> {
   const bbox = bboxAround(spot, radius).map((n) => n.toFixed(6)).join(',')
-  // Dense areas reject heavy answers ("reduce the amount of data"); fall back
-  // to a slimmer one before giving up on this ring.
+  // In dense city areas, Mapillary Graph API throws "reduce the amount of data"
+  // if fields or limits are too large. Query id and geometry with limit=5 first.
   for (const [fields, limit] of [
-    [FIELDS_FULL, 50],
-    [FIELDS_SLIM, 20],
+    [FIELDS_SLIM, 5],
+    [FIELDS_SLIM, 15],
+    [FIELDS_FULL, 10],
   ] as const) {
     const url =
       `https://graph.mapillary.com/images?access_token=${encodeURIComponent(token)}` +
@@ -133,10 +134,13 @@ async function queryBox(
     try {
       const res = await fetchImpl(url)
       if (!res.ok) continue
-      const json = (await res.json()) as { data?: GraphImage[] }
-      return (json.data || []).map(toCandidate).filter((c): c is Candidate => !!c)
+      const json = (await res.json()) as { data?: GraphImage[]; error?: any }
+      if (json.error) continue
+      if (Array.isArray(json.data) && json.data.length > 0) {
+        return json.data.map(toCandidate).filter((c): c is Candidate => !!c)
+      }
     } catch {
-      // Try the slim query, then the next ring.
+      // Try next configuration
     }
   }
   return null
