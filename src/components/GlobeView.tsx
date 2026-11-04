@@ -19,6 +19,7 @@ import {
   TriangleAlert,
   Volume2,
   VolumeX,
+  Camera,
 } from 'lucide-react';
 import { haptic } from '../utils/haptics';
 import { initMapLibreWorker } from '../maplibreWorker';
@@ -30,6 +31,11 @@ import {
   HazardFeature,
   HazardFeatureCollection,
 } from '../utils/hazardAlerts';
+import {
+  loadPublicCameras,
+  buildCameraGeoJSON,
+  PublicCamera,
+} from '../utils/publicCameras';
 
 interface GlobeViewProps {
   events: EventItem[];
@@ -183,6 +189,19 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   });
   const radarOn = radarState > 0;
   const radarOpacity = radarState === 2 ? 90 : radarState === 1 ? 25 : 0;
+
+  // 3-State Cameras Pill: 0 = Off, 1 = California + London pins, 2 = Pins + Labels
+  const [camerasState, setCamerasState] = useState<0 | 1 | 2>(() => {
+    try {
+      const saved = localStorage.getItem('cameras-state');
+      if (saved === '1' || saved === '2') return Number(saved) as 1 | 2;
+      return 1; // Default ON so public cameras in California and London are immediately visible!
+    } catch {
+      return 1;
+    }
+  });
+  const camerasOn = camerasState > 0;
+  const [activeCamera, setActiveCamera] = useState<PublicCamera | null>(null);
 
   // Alerts 3-State: 0 = Off, 1 = Pins Only (Halfway), 2 = Pins + Labels (Full)
   const [alertsState, setAlertsState] = useState<0 | 1 | 2>(() => {
@@ -393,6 +412,21 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       handler.setInputAction((movement: any) => {
         isUserInteractingRef.current = true;
         const picked = viewer.scene.pick(movement.position);
+        if (Cesium.defined(picked) && picked.id && picked.id._cameraData) {
+          const cam = picked.id._cameraData as PublicCamera;
+          haptic.globePin();
+          setActiveCamera(cam);
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(cam.lng, cam.lat - 0.0025, 600),
+            orientation: {
+              heading: Cesium.Math.toRadians(0),
+              pitch: Cesium.Math.toRadians(-45),
+              roll: 0,
+            },
+            duration: 1.8,
+          });
+          return;
+        }
         if (Cesium.defined(picked) && picked.id && picked.id._hazardFeature) {
           const hf = picked.id._hazardFeature as HazardFeature;
           haptic.globePin();
@@ -1574,6 +1608,204 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     };
   }, [alertsOn, alertsState, cesiumReady]);
 
+  // Load and render public traffic cameras (California Caltrans + London TfL)
+  useEffect(() => {
+    const map = mapRef.current;
+    const viewer = cesiumViewerRef.current;
+    const Cesium = (window as any).Cesium;
+    const CAM_LAYERS = ['public-cam-hit', 'public-cam-glow', 'public-cam-circle', 'public-cam-icon', 'public-cam-label'];
+
+    if (!camerasOn) {
+      setActiveCamera(null);
+      if (map && map.getStyle()) {
+        for (const id of CAM_LAYERS) {
+          if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
+        }
+      }
+      if (viewer && !viewer.isDestroyed()) {
+        const toRem: any[] = [];
+        viewer.entities.values.forEach((ent: any) => {
+          if (ent._isPublicCamera) toRem.push(ent);
+        });
+        toRem.forEach((ent) => viewer.entities.remove(ent));
+      }
+      return;
+    }
+
+    let cancelled = false;
+    loadPublicCameras().then((cams) => {
+      if (cancelled || !cams.length) return;
+      const geojson = buildCameraGeoJSON(cams);
+
+      // 1. Paint on MapLibre 3D Globe
+      if (map && map.getStyle()) {
+        try {
+          const src = map.getSource('public-cameras') as maplibregl.GeoJSONSource | undefined;
+          if (src) {
+            src.setData(geojson as any);
+          } else {
+            map.addSource('public-cameras', {
+              type: 'geojson',
+              data: geojson as any,
+            });
+          }
+
+          if (!map.getLayer('public-cam-hit')) {
+            map.addLayer({
+              id: 'public-cam-hit',
+              type: 'circle',
+              source: 'public-cameras',
+              paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 14, 10, 22, 16, 30],
+                'circle-color': '#000000',
+                'circle-opacity': 0.01,
+              },
+            });
+          }
+
+          if (!map.getLayer('public-cam-glow')) {
+            map.addLayer({
+              id: 'public-cam-glow',
+              type: 'circle',
+              source: 'public-cameras',
+              paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 10, 10, 16, 16, 22],
+                'circle-color': '#10b981',
+                'circle-opacity': 0.35,
+                'circle-blur': 0.7,
+              },
+            });
+          }
+
+          if (!map.getLayer('public-cam-circle')) {
+            map.addLayer({
+              id: 'public-cam-circle',
+              type: 'circle',
+              source: 'public-cameras',
+              paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 4.5, 10, 6.5, 16, 8.5],
+                'circle-color': '#059669',
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+              },
+            });
+          }
+
+          if (!map.getLayer('public-cam-label')) {
+            map.addLayer({
+              id: 'public-cam-label',
+              type: 'symbol',
+              source: 'public-cameras',
+              minzoom: 11,
+              layout: {
+                'text-field': ['get', 'name'],
+                'text-size': 10,
+                'text-offset': [0, 1.4],
+                'text-anchor': 'top',
+                'text-optional': true,
+              },
+              paint: {
+                'text-color': '#ecfdf5',
+                'text-halo-color': '#064e3b',
+                'text-halo-width': 2,
+              },
+            });
+          }
+
+          for (const id of CAM_LAYERS) {
+            if (map.getLayer(id)) {
+              if (id === 'public-cam-label') {
+                map.setLayoutProperty(id, 'visibility', camerasState === 2 ? 'visible' : 'none');
+              } else {
+                map.setLayoutProperty(id, 'visibility', 'visible');
+              }
+            }
+          }
+
+          if (!(map as any).__cameraClickBound) {
+            (map as any).__cameraClickBound = true;
+            const openCam = (e: maplibregl.MapLayerMouseEvent) => {
+              const orig = e.originalEvent as MouseEvent & { __camOpened?: boolean };
+              if (orig.__camOpened) return;
+              orig.__camOpened = true;
+              const f = e.features?.[0];
+              if (!f) return;
+              const coords = (f.geometry as any).coordinates as [number, number];
+              const p = (f.properties ?? {}) as any;
+              setActiveCamera({
+                id: p.id,
+                source: p.source,
+                region: p.region,
+                name: p.name,
+                city: p.city,
+                lat: coords[1],
+                lng: coords[0],
+                imageUrl: p.imageUrl,
+                videoUrl: p.videoUrl,
+                viewDirection: p.viewDirection,
+              });
+              map.flyTo({ center: coords, zoom: 15.5, pitch: 45, duration: 1600 });
+            };
+
+            for (const id of CAM_LAYERS) {
+              map.on('mouseenter', id, () => {
+                map.getCanvas().style.cursor = 'pointer';
+              });
+              map.on('mouseleave', id, () => {
+                map.getCanvas().style.cursor = '';
+              });
+              map.on('click', id, openCam);
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Paint on Cesium 3D Globe
+      if (viewer && !viewer.isDestroyed() && Cesium) {
+        try {
+          const toRem: any[] = [];
+          viewer.entities.values.forEach((ent: any) => {
+            if (ent._isPublicCamera) toRem.push(ent);
+          });
+          toRem.forEach((ent) => viewer.entities.remove(ent));
+
+          cams.forEach((cam) => {
+            const ent = viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(cam.lng, cam.lat, 40),
+              point: {
+                pixelSize: 9,
+                color: Cesium.Color.fromCssColorString('#10b981'),
+                outlineColor: Cesium.Color.fromCssColorString('#ffffff'),
+                outlineWidth: 2,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              },
+              ...(camerasState === 2
+                ? {
+                    label: {
+                      text: `📹 ${cam.name.slice(0, 22)}`,
+                      font: 'bold 9px system-ui, -apple-system, sans-serif',
+                      fillColor: Cesium.Color.fromCssColorString('#a7f3d0'),
+                      showBackground: true,
+                      backgroundColor: Cesium.Color.fromCssColorString('#022c22').withAlpha(0.85),
+                      backgroundPadding: new Cesium.Cartesian2(4, 2),
+                      pixelOffset: new Cesium.Cartesian2(0, -14),
+                      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    },
+                  }
+                : {}),
+            });
+            ent._isPublicCamera = true;
+            ent._cameraData = cam;
+          });
+        } catch {}
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [camerasOn, camerasState, cesiumReady]);
+
   const altMeters = telemetry.altMeters || zoomToAltitudeMeters(telemetry.zoom);
   const isStreetLevel = altMeters < 8500 || telemetry.zoom >= 12;
 
@@ -1752,6 +1984,97 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </div>
       )}
 
+      {/* Live Public Traffic Camera ID Card (California & London) */}
+      {activeCamera && (
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute top-14 left-4 z-40 flex flex-col gap-1.5 pointer-events-auto"
+        >
+          <div className="w-[320px] p-3 rounded-2xl bg-slate-950/95 border border-emerald-500/40 backdrop-blur-xl shadow-2xl flex flex-col gap-2">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
+                  {activeCamera.source === 'caltrans' ? 'Caltrans Live CCTV' : 'TfL London JamCam'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveCamera(null)}
+                aria-label="Close camera feed"
+                title="Close camera feed"
+                className="text-slate-400 hover:text-white text-xs leading-none p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Location & Title */}
+            <div>
+              <div className="text-[12px] font-bold text-slate-100 leading-snug">
+                {activeCamera.name}
+              </div>
+              <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1.5 mt-0.5">
+                <span>📍 {activeCamera.city || activeCamera.region}</span>
+                {activeCamera.viewDirection && (
+                  <span>· Facing {activeCamera.viewDirection}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Live Camera Feed Image / Video Player */}
+            <div className="relative w-full h-[180px] bg-slate-900 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
+              {activeCamera.videoUrl && activeCamera.videoUrl.endsWith('.mp4') ? (
+                <video
+                  src={activeCamera.videoUrl}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <img
+                  src={activeCamera.imageUrl}
+                  alt={activeCamera.name}
+                  className="w-full h-full object-cover"
+                  loading="eager"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.dataset.retried) {
+                      target.dataset.retried = 'true';
+                      target.src = `${activeCamera.imageUrl}?t=${Date.now()}`;
+                    }
+                  }}
+                />
+              )}
+              {/* Live Badge */}
+              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-md border border-white/10 flex items-center gap-1 text-[9px] font-mono text-emerald-300 font-semibold uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                LIVE
+              </div>
+            </div>
+
+            {/* Actions Footer */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[9px] font-mono text-slate-500">
+                {activeCamera.lat.toFixed(4)}, {activeCamera.lng.toFixed(4)}
+              </span>
+              <a
+                href={activeCamera.imageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 hover:underline"
+              >
+                Open Full Res ↗
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* BOTTOM-LEFT: Alerts on top, Radar immediately below */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
@@ -1885,6 +2208,71 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             <div
               className={`w-1 h-1 rounded-full transition-all duration-300 ${
                 radarState === 2 ? 'bg-cyan-400 shadow-[0_0_4px_#22d3ee]' : 'bg-slate-700'
+              }`}
+            />
+          </div>
+        </button>
+
+        {/* 3-State Interactive Live Cameras Pill (California + London) */}
+        <button
+          type="button"
+          onClick={() => {
+            haptic.globePinLight();
+            const next = ((camerasState + 1) % 3) as 0 | 1 | 2;
+            setCamerasState(next);
+            try {
+              localStorage.setItem('cameras-state', String(next));
+            } catch {}
+          }}
+          title={
+            camerasState === 0
+              ? 'Cameras: Off (Tap to show California & London live traffic cameras)'
+              : camerasState === 1
+              ? 'Cameras: Active (Tap to show Camera Names & Highways)'
+              : 'Cameras: Full (Tap to Turn Off)'
+          }
+          aria-label={`Live Cameras status: ${
+            camerasState === 0 ? 'Off' : camerasState === 1 ? 'Pins Active' : 'Full Labels'
+          }`}
+          className="app-globe-tactical-pill relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
+        >
+          {/* Animated Left-to-Right Highlight Background */}
+          <div
+            className="absolute left-0 top-0 bottom-0 bg-emerald-500/25 border-r border-emerald-400/50 transition-all duration-300 pointer-events-none"
+            style={{
+              width: camerasState === 1 ? '50%' : camerasState === 2 ? '100%' : '0%',
+            }}
+          />
+
+          {/* Foreground Icon & Label */}
+          <div className="relative z-10 flex items-center gap-1.5 pointer-events-none">
+            <Camera
+              size={12}
+              className={`app-globe-pill-icon transition-colors duration-300 ${
+                camerasState > 0
+                  ? 'text-emerald-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.5)]'
+                  : 'text-slate-400'
+              }`}
+            />
+            <span
+              className={`app-globe-pill-text font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
+                camerasState > 0 ? 'text-emerald-200' : 'text-slate-400'
+              }`}
+            >
+              Cams
+            </span>
+          </div>
+
+          {/* Tactical 2-Dot Meter Indicator on Right */}
+          <div className="relative z-10 ml-2 flex items-center gap-1 pointer-events-none">
+            <div
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                camerasState >= 1 ? 'bg-emerald-400 shadow-[0_0_4px_#34d399]' : 'bg-slate-700'
+              }`}
+            />
+            <div
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                camerasState === 2 ? 'bg-emerald-400 shadow-[0_0_4px_#34d399]' : 'bg-slate-700'
               }`}
             />
           </div>
