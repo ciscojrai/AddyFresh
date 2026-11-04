@@ -356,8 +356,25 @@ html, body, #root {
   box-shadow: 0 0 16px rgba(34, 211, 238, 0.55) !important;
 }
 
-/* Show TV D-Pad + Mouse bottom bar & virtual cursor ring in TV 10' mode */
-.app-shell[data-device="tv"] .app-tv-dpad-bar {
+/* TV 10' Globe D-Pad & Mouse Navigation Bar */
+.app-shell[data-device="tv"] .app-globe-dpad-bar {
+  gap: 12px !important;
+}
+
+.app-shell[data-device="tv"] .app-globe-nav-btn {
+  width: 48px !important;
+  height: 48px !important;
+  border-width: 2px !important;
+  border-color: rgba(34, 211, 238, 0.6) !important;
+}
+
+.app-shell[data-device="tv"] .app-globe-nav-btn svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Mouse pointer button is ONLY added in TV UI 10' mode */
+.app-shell[data-device="tv"] .app-tv-only-mouse {
   display: flex !important;
 }
 

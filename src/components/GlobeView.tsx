@@ -1930,79 +1930,79 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         <span className="text-slate-300">Google Maps 3D</span>
       </div>
 
-      {/* TV 10' BOTTOM D-PAD & MOUSE NAVIGATION BAR */}
+      {/* GLOBE D-PAD NAVIGATION BAR (Available throughout Tall, Wide, and TV) */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="app-tv-dpad-bar hidden absolute bottom-3 left-1/2 -translate-x-1/2 z-30 items-center gap-3 pointer-events-auto"
+        className="app-globe-dpad-bar absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 pointer-events-auto"
         role="toolbar"
-        aria-label="Android TV 10-Foot Globe Navigation Bar"
+        aria-label="Globe Navigation Bar"
       >
         <button
           type="button"
           onClick={() => handleTvDpadPan('up')}
-          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
-          title="D-Pad Pan Up"
+          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          title="Pan Up"
         >
-          <ArrowUp size={20} />
+          <ArrowUp size={16} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadPan('down')}
-          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
-          title="D-Pad Pan Down"
+          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          title="Pan Down"
         >
-          <ArrowDown size={20} />
+          <ArrowDown size={16} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadPan('left')}
-          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
-          title="D-Pad Pan Left"
+          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          title="Pan Left"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={16} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadPan('right')}
-          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
-          title="D-Pad Pan Right"
+          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
+          title="Pan Right"
         >
-          <ArrowRight size={20} />
+          <ArrowRight size={16} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadZoom('out')}
-          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
+          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
           title="Zoom Out (-)"
         >
-          <Minus size={20} />
+          <Minus size={16} />
         </button>
         <button
           type="button"
           onClick={() => handleTvDpadZoom('in')}
-          className="w-12 h-12 rounded-full bg-slate-900/90 hover:bg-slate-800 border-2 border-cyan-400/60 hover:border-cyan-300 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-[0_0_16px_rgba(15,23,42,0.85)] active:scale-95 transition-all cursor-pointer"
+          className="app-globe-nav-btn w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-slate-100 hover:text-cyan-300 flex items-center justify-center shadow-md active:scale-95 transition-all cursor-pointer"
           title="Zoom In (+)"
         >
-          <Plus size={20} />
+          <Plus size={16} />
         </button>
 
-        {/* Mouse / D-Pad Toggle Button */}
-        <div className="relative flex flex-col items-center">
+        {/* Mouse Pointer Button (ONLY added in TV UI 10' mode) */}
+        <div className="app-tv-only-mouse hidden relative flex-col items-center">
           <button
             type="button"
             onClick={() => {
               haptic.globePinLight();
               setTvMouseMode((prev) => !prev);
             }}
-            className={`w-13 h-13 rounded-full flex items-center justify-center border-2 transition-all active:scale-95 cursor-pointer ${
+            className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all active:scale-95 cursor-pointer ${
               tvMouseMode
                 ? 'bg-cyan-400 border-cyan-200 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.8)]'
                 : 'bg-slate-900/90 border-slate-600 text-slate-300 hover:border-cyan-400/60'
             }`}
-            title="Toggle TV D-Pad / Virtual Mouse Mode"
+            title="Toggle TV Virtual Mouse Mode"
           >
-            <MousePointer2 size={22} className="fill-current" />
+            <MousePointer2 size={20} className="fill-current" />
           </button>
         </div>
       </div>
