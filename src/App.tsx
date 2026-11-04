@@ -1031,13 +1031,13 @@ export default function App() {
               zIndex: isSwapped ? 25 : 10,
             }}
           >
-            {/* Bottom-Left Tactical Bar: Screen Target Selector (Tall, Wide, TV) + 3D Globe toggle */}
+            {/* Top-Center Tactical Bar: Screen Target Selector (Tall, Wide, TV) + 3D Globe toggle */}
             <div
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="absolute bottom-2.5 left-3 z-30 flex flex-col items-start gap-1.5 pointer-events-auto"
+              className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 pointer-events-auto"
             >
-              {/* Line 1: Screen Target Selector aligned to the bottom-left edge */}
+              {/* Line 1: Screen Target Selector centered */}
               <div
                 className="app-device-toggle flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg"
                 role="radiogroup"
