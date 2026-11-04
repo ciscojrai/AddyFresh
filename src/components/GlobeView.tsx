@@ -1725,37 +1725,12 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </div>
       )}
 
-      {/* BOTTOM-RIGHT: Circular Tactical Control Dock + Rain Radar Pill & Alerts Toggle */}
+      {/* BOTTOM-LEFT: Rain Radar Pill with Alerts immediately to its right */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="absolute bottom-2.5 right-3 z-20 flex flex-wrap items-center justify-end gap-1.5 pointer-events-auto"
+        className="absolute bottom-2.5 left-3 z-20 flex items-center gap-1.5 pointer-events-auto"
       >
-        {/* Voice: starts or ends the Pagos conversation session */}
-        {onToggleVoice && (
-          <VoiceButton
-            variant="globe"
-            state={voiceState}
-            secondsLeft={voiceSecondsLeft}
-            onToggle={onToggleVoice}
-          />
-        )}
-
-        {/* Globe speaker: audio on/off for the globe voice chat only, separate from panel. */}
-        {onToggleAudio && (
-          <button
-            type="button"
-            onClick={onToggleAudio}
-            title={audioOn ? 'Globe audio: On (tap to mute)' : 'Globe audio: Off (tap to unmute)'}
-            aria-label={audioOn ? 'Turn globe audio off' : 'Turn globe audio on'}
-            className={`w-9 h-9 rounded-full flex items-center justify-center border shadow-md transition-colors cursor-pointer ${
-              audioOn ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-slate-800 text-slate-400 border-slate-700'
-            }`}
-          >
-            {audioOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
-          </button>
-        )}
-
         {/* 3-State Interactive Rain Radar Pill (Off -> 25% Dim Halfway -> 90% Bright Full) */}
         <button
           type="button"
@@ -1889,12 +1864,38 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </button>
       </div>
 
-      {/* BOTTOM-RIGHT: Horizontal Zoom In (+) / Zoom Out (-) Controls */}
+      {/* BOTTOM-RIGHT: Circular Tactical Control Dock (Voice & Audio) + Horizontal Zoom (+ / -) */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="absolute right-3 bottom-2.5 flex items-center gap-1.5 z-20 pointer-events-auto"
+        className="absolute bottom-2.5 right-3 z-20 flex items-center justify-end gap-1.5 pointer-events-auto"
       >
+        {/* Voice: starts or ends the Pagos conversation session */}
+        {onToggleVoice && (
+          <VoiceButton
+            variant="globe"
+            state={voiceState}
+            secondsLeft={voiceSecondsLeft}
+            onToggle={onToggleVoice}
+          />
+        )}
+
+        {/* Globe speaker: audio on/off for the globe voice chat only, separate from panel. */}
+        {onToggleAudio && (
+          <button
+            type="button"
+            onClick={onToggleAudio}
+            title={audioOn ? 'Globe audio: On (tap to mute)' : 'Globe audio: Off (tap to unmute)'}
+            aria-label={audioOn ? 'Turn globe audio off' : 'Turn globe audio on'}
+            className={`w-9 h-9 rounded-full flex items-center justify-center border shadow-md transition-colors cursor-pointer ${
+              audioOn ? 'bg-cyan-600 text-white border-cyan-400' : 'bg-slate-800 text-slate-400 border-slate-700'
+            }`}
+          >
+            {audioOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+        )}
+
+        {/* Zoom Out (-) */}
         <button
           type="button"
           onClick={(e) => {
@@ -1916,6 +1917,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         >
           <Minus size={13} />
         </button>
+
+        {/* Zoom In (+) */}
         <button
           type="button"
           onClick={(e) => {
