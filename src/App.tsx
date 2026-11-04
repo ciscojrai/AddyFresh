@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GlobeView } from './components/GlobeView';
 import { HomeFeed } from './components/HomeFeed';
 import { SearchView } from './components/SearchView';
-import { ChatView, ChatConversation } from './components/ChatView';
+import { ChatView, ChatConversation, MuseGlobeAction } from './components/ChatView';
 import { SavedView } from './components/SavedView';
 import { FestivalFeed } from './components/FestivalFeed';
 import { BottomControls } from './components/BottomControls';
@@ -24,6 +24,7 @@ import { flyCameraToCoordinate } from './cameraFlyer.js';
 import { initMapLibreWorker } from './maplibreWorker.ts';
 import { GoogleMap3DView } from './components/GoogleMap3DView';
 import { GlobeActivitiesMenu } from './components/GlobeActivitiesMenu';
+import { B2BLandmarks, B2BPin } from './components/B2BLandmarks';
 import { ChevronUp, Smartphone, Tablet, Tv, Globe, ArrowLeftRight, ArrowUpDown, ArrowDown, ArrowUp, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useHaptic } from './hooks/useHaptic';
 import { speakWithAddyVoice, stopAddyVoicePlayback } from './utils/metaVoice';
@@ -713,7 +714,7 @@ export default function App() {
     setPanelAudioOn(panelAudioOnRef.current);
     if (!panelAudioOnRef.current) stopAddyVoicePlayback();
   };
-  const applyMuseActions = (actions?: Array<{ type: string; lat?: number; lon?: number; enabled?: boolean }>) => {
+  const applyMuseActions = (actions?: Array<{ type: string; lat?: number; lon?: number; label?: string; enabled?: boolean }>) => {
     (actions || []).forEach((a) => {
       if (a.type === 'fly_to' && typeof a.lat === 'number' && typeof a.lon === 'number') {
         flyCameraToCoordinate({ lat: a.lat, lng: a.lon, target: 'globe' });
@@ -723,6 +724,41 @@ export default function App() {
         window.dispatchEvent(new CustomEvent('freshaddy:set-alerts', { detail: { enabled: a.enabled !== false } }));
       }
     });
+  };
+
+  // Refresh icon handler: re-apply a logged message's stored actions only.
+  // No Muse call, no retyping, no new chat log entry. With no stored actions,
+  // fall back to the currently selected event (if any); otherwise do nothing
+  // and never invent a location.
+  const handleRefreshGlobe = (actions?: MuseGlobeAction[]) => {
+    if (!actions || actions.length === 0) {
+      if (selectedEvent) handleSelectEvent(selectedEvent);
+      return;
+    }
+    applyMuseActions(actions);
+    const fly = actions.find(
+      (a) => a.type === 'fly_to' && typeof a.lat === 'number' && typeof a.lon === 'number'
+    );
+    if (fly && typeof fly.lat === 'number' && typeof fly.lon === 'number') {
+      const matched = events.find(
+        (e) => Math.abs(e.lat - (fly.lat as number)) < 0.01 && Math.abs(e.lng - (fly.lon as number)) < 0.01
+      );
+      if (matched) {
+        handleSelectEvent(matched);
+      } else {
+        handleSelectEvent({
+          id: `refresh-${Math.round((fly.lat as number) * 10000)}-${Math.round((fly.lon as number) * 10000)}`,
+          title: fly.label || 'That place',
+          city: fly.label || '',
+          country: '',
+          date: '',
+          category: '',
+          lat: fly.lat as number,
+          lng: fly.lon as number,
+          description: '',
+        });
+      }
+    }
   };
 
   const handleSendMessageInChat = async (
@@ -783,6 +819,22 @@ export default function App() {
         )
       );
 
+    // Store the reply's globe actions on that assistant message, so the
+    // refresh icon can re-apply them later with no new Muse call.
+    const setAssistantActions = (actions?: MuseGlobeAction[]) =>
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === assistantId ? { ...m, globeActions: actions || [] } : m
+                ),
+              }
+            : c
+        )
+      );
+
     // Meta Muse (server-side proxy: /api/muse/chat). On any failure fall back to the local search answer.
     fetch('/api/muse/chat', {
       method: 'POST',
@@ -803,9 +855,10 @@ export default function App() {
         if (!r.ok) throw new Error(`muse ${r.status}`);
         return r.json();
       })
-      .then((data: { text?: string; actions?: Array<{ type: string; lat?: number; lon?: number; enabled?: boolean }> }) => {
+      .then((data: { text?: string; actions?: Array<{ type: string; lat?: number; lon?: number; label?: string; enabled?: boolean }> }) => {
         const replyText = data.text || 'Pagos had no answer for that.';
         setAssistantText(replyText);
+        setAssistantActions(data.actions);
         lastReply = replyText;
         resolveReply(replyText);
         applyMuseActions(data.actions);
@@ -814,6 +867,7 @@ export default function App() {
         console.warn('Muse chat unavailable, using local search:', err);
         const local = `${generateAiResponse(messageText, events)}\n\nMuse offline - showing local results.`;
         setAssistantText(local);
+        setAssistantActions([]);
         lastReply = local;
         resolveReply(local);
       });
@@ -977,13 +1031,13 @@ export default function App() {
               zIndex: isSwapped ? 25 : 10,
             }}
           >
-            {/* Top Tactical Bar: Screen Target on Right Edge + Axis Swapped immediately below */}
+            {/* Bottom-Left Tactical Bar: Screen Target Selector (Tall, Wide, TV) + 3D Globe toggle */}
             <div
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="absolute top-2.5 right-3 z-30 flex flex-col items-end gap-1.5 pointer-events-auto"
+              className="absolute bottom-2.5 left-3 z-30 flex flex-col items-start gap-1.5 pointer-events-auto"
             >
-              {/* Line 1: Screen Target Selector aligned to the right edge */}
+              {/* Line 1: Screen Target Selector aligned to the bottom-left edge */}
               <div
                 className="app-device-toggle flex items-center gap-0.5 p-0.5 rounded-full bg-slate-950/85 border border-slate-700/80 backdrop-blur-md shadow-lg"
                 role="radiogroup"
@@ -1210,6 +1264,22 @@ export default function App() {
                     }
                   }}
                 />
+                <B2BLandmarks
+                  onSelectLandmark={(pin: B2BPin) =>
+                    handleSelectEvent({
+                      id: `b2b-${pin.id}`,
+                      title: pin.name,
+                      city: pin.name,
+                      country: '',
+                      date: 'Verified landmark',
+                      category: pin.category,
+                      tags: [pin.category],
+                      lat: pin.latitude,
+                      lng: pin.longitude,
+                      description: pin.fact || pin.visual_stat || '',
+                    })
+                  }
+                />
               </div>
             ) : (
               <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
@@ -1260,6 +1330,14 @@ export default function App() {
                     onToggleVoice={togglePanelVoice}
                     audioOn={panelAudioOn}
                     onToggleAudio={togglePanelAudio}
+                    onUploadData={(items) => {
+                      setEvents((prev) => {
+                        const seen = new Set(prev.map((e) => e.id));
+                        return [...items.filter((it) => !seen.has(it.id)), ...prev];
+                      });
+                      if (items[0]) handleSelectEvent(items[0]);
+                    }}
+                    onRefreshGlobe={handleRefreshGlobe}
                     onBackFromChat={() => setActiveNav('home')}
                   />
                 )}

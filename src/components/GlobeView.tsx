@@ -289,7 +289,10 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         navigationInstructionsInitiallyVisible: false,
         scene3DOnly: true,
         skyBox: false,
-        requestRenderMode: false,
+        // Render on demand only (camera moves / data changes) instead of every frame:
+        // continuous rendering of Cesium + MapLibre together was hanging the browser on load.
+        requestRenderMode: true,
+        maximumRenderTimeChange: Infinity,
         contextOptions: {
           webgl: {
             alpha: true,
@@ -329,7 +332,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         try {
           // Asset 2275207 = Google Photorealistic 3D Tiles on Cesium Ion
           const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(2275207, {
-            maximumScreenSpaceError: 16,
+            // Lighter on first load: fewer, coarser tiles instead of max detail immediately.
+            maximumScreenSpaceError: 32,
           });
           if (!viewer.isDestroyed()) {
             viewer.scene.primitives.add(tileset);
@@ -1751,6 +1755,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             {audioOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
         )}
+
         {/* 3-State Interactive Rain Radar Pill (Off -> 25% Dim Halfway -> 90% Bright Full) */}
         <button
           type="button"
@@ -1934,8 +1939,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </button>
       </div>
 
-      {/* BOTTOM-LEFT: Cesium Ion & Google Maps small attribution badge */}
-      <div className="absolute bottom-2 left-3 z-20 pointer-events-none font-mono text-[9px] tracking-wider text-slate-400/80 bg-slate-950/60 px-2 py-0.5 rounded border border-cyan-500/20 backdrop-blur-sm flex items-center gap-1.5">
+      {/* TOP-RIGHT: Cesium Ion & Google Maps small attribution badge */}
+      <div className="absolute top-2.5 right-3 z-20 pointer-events-none font-mono text-[9px] tracking-wider text-slate-400/80 bg-slate-950/60 px-2 py-0.5 rounded border border-cyan-500/20 backdrop-blur-sm flex items-center gap-1.5 shadow-md">
         <span className="text-cyan-400 font-semibold">CESIUM ion</span>
         <span>·</span>
         <span className="text-slate-300">Google Maps 3D</span>
