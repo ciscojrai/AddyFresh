@@ -1587,141 +1587,14 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             <span>⚠️ {hazardFeatures[0].properties.hazard}</span>
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setAutoRotate((prev) => !prev)}
-          className={`w-7 h-7 rounded-full flex items-center justify-center border backdrop-blur-md transition-all cursor-pointer ${
-            autoRotate && !isStreetLevel
-              ? 'bg-cyan-500/25 border-cyan-400/80 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.35)]'
-              : 'bg-slate-950/80 border-slate-700/80 text-slate-400 hover:text-slate-200'
-          }`}
-          title="Toggle Orbital Auto-Rotation"
-        >
-          <RotateCw size={12} />
-        </button>
-        <button
-          type="button"
-          onClick={handleToggleStreetDive}
-          className={`h-7 px-2.5 rounded-full flex items-center gap-1 border backdrop-blur-md font-mono text-[9.5px] font-bold tracking-wider transition-all cursor-pointer ${
-            isStreetLevel
-              ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(34,211,238,0.45)]'
-              : 'bg-slate-950/80 border-slate-700/80 text-slate-300 hover:border-cyan-400/60 hover:text-cyan-300'
-          }`}
-          title={isStreetLevel ? 'Return to 3D Earth' : "Dive to Street 3D"}
-        >
-          <Box size={11} />
-          <span>{isStreetLevel ? 'EARTH' : 'STREET 3D'}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (engineMode === 'cesium' && cesiumViewerRef.current) {
-              const viewer = cesiumViewerRef.current;
-              const Cesium = (window as any).Cesium;
-              const carto = viewer.camera.positionCartographic;
-              if (carto && Cesium) {
-                const lat = Cesium.Math.toDegrees(carto.latitude);
-                const lng = Cesium.Math.toDegrees(carto.longitude);
-                const isTilted = viewer.camera.pitch > -1.1;
-                viewer.camera.flyTo({
-                  destination: Cesium.Cartesian3.fromDegrees(lng, lat, Math.max(400, carto.height)),
-                  orientation: {
-                    heading: viewer.camera.heading,
-                    pitch: Cesium.Math.toRadians(isTilted ? -89 : -32),
-                    roll: 0,
-                  },
-                  duration: 0.7,
-                });
-              }
-              return;
-            }
-            const map = mapRef.current;
-            if (!map) return;
-            const nextPitch = map.getPitch() > 25 ? 0 : 62;
-            map.easeTo({ pitch: nextPitch, duration: 700 });
-          }}
-          className={`w-7 h-7 rounded-full flex items-center justify-center border backdrop-blur-md transition-all cursor-pointer ${
-            telemetry.pitch > 25
-              ? 'bg-cyan-500/25 border-cyan-400/80 text-cyan-300'
-              : 'bg-slate-950/80 border-slate-700/80 text-slate-400 hover:text-slate-200'
-          }`}
-          title="Toggle 3D Camera Tilt (Pitch)"
-        >
-          <Compass size={12} />
-        </button>
-        {cesiumReady && (
-          <button
-            type="button"
-            onClick={() => setEngineMode((m) => (m === 'cesium' ? 'maplibre' : 'cesium'))}
-            className={`w-7 h-7 rounded-full flex items-center justify-center border backdrop-blur-md transition-all cursor-pointer ${
-              engineMode === 'cesium'
-                ? 'bg-cyan-500/25 border-cyan-400/80 text-cyan-300'
-                : 'bg-slate-950/80 border-slate-700/80 text-slate-400 hover:text-slate-200'
-            }`}
-            title={
-              engineMode === 'cesium'
-                ? 'Active: Cesium Ion + Google 3D Tiles (Click for Hybrid Vector)'
-                : 'Switch to Cesium Ion + Google 3D Tiles'
-            }
-          >
-            <Layers size={12} />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => {
-            const viewer = cesiumViewerRef.current;
-            const Cesium = (window as any).Cesium;
-            if (engineMode === 'cesium' && viewer && !viewer.isDestroyed() && Cesium) {
-              viewer.camera.flyTo({
-                destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 16143645),
-                orientation: {
-                  heading: 0,
-                  pitch: -Cesium.Math.PI_OVER_TWO,
-                  roll: 0,
-                },
-                duration: 1.8,
-              });
-              return;
-            }
-            const map = mapRef.current;
-            if (!map) return;
-            map.flyTo({ center: [-95.5, 30.2], zoom: 1.75, pitch: 0, bearing: 0, duration: 1800 });
-          }}
-          className="w-7 h-7 rounded-full bg-slate-950/80 border border-slate-700/80 text-slate-400 hover:text-white flex items-center justify-center backdrop-blur-md transition-all cursor-pointer"
-          title="Reset to Full 3D Earth Globe"
-        >
-          <Globe size={12} />
-        </button>
       </div>
 
-      {/* RIGHT-CENTER: Zoom In (+ to Street Level) / Zoom Out (- to Space) + Street Dive Button */}
+      {/* BOTTOM-RIGHT: Horizontal Zoom In (+) / Zoom Out (-) Controls */}
       <div
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="absolute right-3.5 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-20 pointer-events-auto"
+        className="absolute right-3 bottom-2.5 flex items-center gap-1.5 z-20 pointer-events-auto"
       >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            const viewer = cesiumViewerRef.current;
-            if (engineMode === 'cesium' && viewer && !viewer.isDestroyed()) {
-              const h = viewer.camera.positionCartographic?.height || 10000000;
-              viewer.camera.zoomIn(Math.max(120, h * 0.48));
-              return;
-            }
-            const map = mapRef.current;
-            if (!map) return;
-            const nextZoom = Math.min(19.2, map.getZoom() + (map.getZoom() < 6 ? 1.4 : 1.1));
-            const nextPitch = nextZoom >= 12.5 ? 62 : map.getPitch();
-            map.easeTo({ zoom: nextZoom, pitch: nextPitch, duration: 450 });
-          }}
-          className="w-7 h-7 rounded-full bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-cyan-300 flex items-center justify-center text-xs font-bold transition-all shadow-md active:scale-90 cursor-pointer"
-          title="Zoom In (All the way to Street Level)"
-        >
-          <Plus size={13} />
-        </button>
         <button
           type="button"
           onClick={(e) => {
@@ -1739,7 +1612,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             map.easeTo({ zoom: nextZoom, pitch: nextPitch, duration: 450 });
           }}
           className="w-7 h-7 rounded-full bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-cyan-300 flex items-center justify-center text-xs font-bold transition-all shadow-md active:scale-90 cursor-pointer"
-          title="Zoom Out to 3D Globe"
+          title="Zoom Out (-)"
         >
           <Minus size={13} />
         </button>
@@ -1747,16 +1620,22 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            handleToggleStreetDive();
+            const viewer = cesiumViewerRef.current;
+            if (engineMode === 'cesium' && viewer && !viewer.isDestroyed()) {
+              const h = viewer.camera.positionCartographic?.height || 10000000;
+              viewer.camera.zoomIn(Math.max(120, h * 0.48));
+              return;
+            }
+            const map = mapRef.current;
+            if (!map) return;
+            const nextZoom = Math.min(19.2, map.getZoom() + (map.getZoom() < 6 ? 1.4 : 1.1));
+            const nextPitch = nextZoom >= 12.5 ? 62 : map.getPitch();
+            map.easeTo({ zoom: nextZoom, pitch: nextPitch, duration: 450 });
           }}
-          className={`w-7 h-7 rounded-full border flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer ${
-            isStreetLevel
-              ? 'bg-cyan-500/30 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.45)]'
-              : 'bg-slate-900/85 hover:bg-slate-800 border-slate-700/80 text-cyan-400'
-          }`}
-          title={isStreetLevel ? 'Zoom Out to 3D Globe' : "Dive to 3D Street Level"}
+          className="w-7 h-7 rounded-full bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 text-slate-200 hover:text-cyan-300 flex items-center justify-center text-xs font-bold transition-all shadow-md active:scale-90 cursor-pointer"
+          title="Zoom In (+)"
         >
-          <Eye size={13} />
+          <Plus size={13} />
         </button>
       </div>
 
