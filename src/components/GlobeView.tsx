@@ -41,6 +41,11 @@ interface GlobeViewProps {
   voiceState?: SessionState;
   voiceSecondsLeft?: number;
   onToggleVoice?: () => void;
+  /** Optional inline conversational AI integration for God's Eye View */
+  conversations?: any[];
+  activeConversationId?: string | null;
+  onSendMessage?: (conversationId: string, text: string) => Promise<any> | void;
+  onNewChat?: () => void;
 }
 
 // Approximate camera altitude in meters from MapLibre zoom level
@@ -123,6 +128,10 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   voiceState = 'closed',
   voiceSecondsLeft = 0,
   onToggleVoice,
+  conversations = [],
+  activeConversationId,
+  onSendMessage,
+  onNewChat,
 }) => {
   const starCanvasRef = useRef<HTMLCanvasElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -156,24 +165,38 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   const [cesiumReady, setCesiumReady] = useState<boolean>(false);
 
   const [autoRotate, setAutoRotate] = useState(false);
-  const [radarOn, setRadarOn] = useState<boolean>(() => Boolean(radarActive));
-  const [radarOpacity, setRadarOpacity] = useState<number>(() => {
+  const [radarState, setRadarState] = useState<0 | 1 | 2>(() => {
     try {
-      const saved = Number(localStorage.getItem('radar-opacity'));
-      return Number.isFinite(saved) && saved >= 10 && saved <= 90 ? saved : 65;
+      const saved = localStorage.getItem('radar-state');
+      if (saved === '1' || saved === '2') return Number(saved) as 1 | 2;
+      return radarActive ? 2 : 0;
     } catch {
-      return 65;
+      return radarActive ? 2 : 0;
     }
   });
-  const [alertsOn, setAlertsOn] = useState<boolean>(() => {
+  const radarOn = radarState > 0;
+  const radarOpacity = radarState === 2 ? 90 : radarState === 1 ? 15 : 0;
+
+  // Alerts 3-State: 0 = Off, 1 = Pins Only (Halfway), 2 = Pins + Labels (Full)
+  const [alertsState, setAlertsState] = useState<0 | 1 | 2>(() => {
     try {
-      return localStorage.getItem('alerts-on') !== '0';
+      const saved = localStorage.getItem('alerts-state');
+      if (saved === '1' || saved === '2') return Number(saved) as 1 | 2;
+      return localStorage.getItem('alerts-on') === '0' ? 0 : 1;
     } catch {
-      return true;
+      return 1;
     }
   });
+  const alertsOn = alertsState > 0;
   const [hazardFeatures, setHazardFeatures] = useState<HazardFeature[]>([]);
   const [activeAlertCard, setActiveAlertCard] = useState<HazardFeature | null>(null);
+  const [alertOverlayPos, setAlertOverlayPos] = useState<{ x: number; y: number } | null>(null);
+  const [isChatOverlayOpen, setIsChatOverlayOpen] = useState(false);
+  const [chatOverlayInput, setChatOverlayInput] = useState('');
+  const [isChatOverlayCollapsed, setIsChatOverlayCollapsed] = useState(false);
+  const [chatDragOffset, setChatDragOffset] = useState({ x: 0, y: 0 });
+  const isDraggingChatRef = useRef(false);
+  const chatDragStartRef = useRef({ mouseX: 0, mouseY: 0, startX: 0, startY: 0 });
   const radarLayerCesiumRef = useRef<any>(null);
   const [telemetry, setTelemetry] = useState({
     lat: 30.2672,
@@ -228,7 +251,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     return () => ro.disconnect();
   }, []);
 
-  // 2A. Initialize Cesium Ion + Google Photorealistic 3D Tiles Viewer (Primary 3D Engine)
+  // 2A. Initialize Cesium Ion + Google Photorealistic 3D Tiles Viewer (Primary God's Eye Engine)
   useEffect(() => {
     const container = cesiumContainerRef.current;
     const Cesium = (window as any).Cesium;
@@ -363,11 +386,16 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           const hf = picked.id._hazardFeature as HazardFeature;
           haptic.globePin();
           setActiveAlertCard(hf);
-          const [lng, lat] = hf.geometry.coordinates;
-          const currentHeight = viewer.camera.positionCartographic?.height || 16000000;
+          const [lng, lat] = hf.geometry.type === 'Polygon' ? hf.geometry.coordinates[0][0] : hf.geometry.coordinates;
+          // Dive to aerial inspection height (650m - 1200m) to inspect the affected area (Image 3)
           viewer.camera.flyTo({
-            destination: Cesium.Cartesian3.fromDegrees(lng, lat, Math.min(currentHeight, 4800000)),
-            duration: 1.4,
+            destination: Cesium.Cartesian3.fromDegrees(lng, lat - 0.003, 850),
+            orientation: {
+              heading: Cesium.Math.toRadians(0),
+              pitch: Cesium.Math.toRadians(-55),
+              roll: 0,
+            },
+            duration: 1.8,
           });
           return;
         }
@@ -442,7 +470,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     };
   }, [cesiumToken]);
 
-  // Populate Cesium Entities for Events + Dynamic Street Telemetry (`VEH-xxxxxx`, Camera Nodes)
+  // Populate Cesium Entities for Events + God's Eye Street Telemetry (`VEH-xxxxxx`, Camera Nodes)
   useEffect(() => {
     const viewer = cesiumViewerRef.current;
     const Cesium = (window as any).Cesium;
@@ -451,7 +479,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     // Remove previous dynamic event entities
     const toRemove: any[] = [];
     viewer.entities.values.forEach((ent: any) => {
-      if (ent._isDynamicPin) {
+      if (ent._isDynamicGodsEye) {
         toRemove.push(ent);
       }
     });
@@ -478,7 +506,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
-      pinEntity._isDynamicPin = true;
+      pinEntity._isDynamicGodsEye = true;
       pinEntity._freshaddyEvent = ev;
     });
   }, [events, selectedEvent, activeMood, cesiumReady, onSelectEvent]);
@@ -618,7 +646,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           });
           map.addLayer(
             {
-              id: 'fresh-3d-buildings',
+              id: 'godseye-3d-buildings',
               source: 'openfreemap',
               'source-layer': 'building',
               type: 'fill-extrusion',
@@ -1074,18 +1102,19 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     const onSetRadar = (e: Event) => {
       const custom = e as CustomEvent<{ enabled?: boolean; opacity?: number }>;
       if (typeof custom.detail?.enabled === 'boolean') {
-        setRadarOn(custom.detail.enabled);
-      }
-      if (typeof custom.detail?.opacity === 'number') {
-        setRadarOpacity(Math.min(90, Math.max(10, custom.detail.opacity)));
+        if (custom.detail.enabled) setEngineMode('maplibre');
+        setRadarState(custom.detail.enabled ? 2 : 0);
+        try {
+          localStorage.setItem('radar-state', custom.detail.enabled ? '2' : '0');
+        } catch {}
       }
     };
     const onSetAlerts = (e: Event) => {
       const custom = e as CustomEvent<{ enabled?: boolean }>;
       if (typeof custom.detail?.enabled === 'boolean') {
-        setAlertsOn(custom.detail.enabled);
+        setAlertsState(custom.detail.enabled ? 1 : 0);
         try {
-          localStorage.setItem('alerts-on', custom.detail.enabled ? '1' : '0');
+          localStorage.setItem('alerts-state', custom.detail.enabled ? '1' : '0');
         } catch {}
       }
     };
@@ -1175,6 +1204,9 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
             }
             const provider = new Cesium.UrlTemplateImageryProvider({
               url: tileUrl,
+              // RainViewer tiles are Web Mercator, like newaddy/addylife's MapLibre
+              // layer. Cesium defaults to Geographic, which misplaces them.
+              tilingScheme: new Cesium.WebMercatorTilingScheme(),
               maximumLevel: 7,
               tileWidth: 256,
               tileHeight: 256,
@@ -1198,7 +1230,13 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     const map = mapRef.current;
     const viewer = cesiumViewerRef.current;
     const Cesium = (window as any).Cesium;
-    const ALERT_LAYERS = ['hazard-alert-hit', 'hazard-alert-halo', 'hazard-alert-dot'];
+    const ALERT_LAYERS = [
+      'hazard-area-fill',
+      'hazard-area-stroke',
+      'hazard-alert-hit',
+      'hazard-alert-halo',
+      'hazard-alert-dot',
+    ];
 
     if (!alertsOn) {
       setActiveAlertCard(null);
@@ -1223,9 +1261,86 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       setHazardFeatures(fc.features);
       (window as any).__freshaddy_hazard_alerts = fc.features;
 
-      // 1. Paint on MapLibre 3D Globe
+      // 1. Paint on MapLibre 3D Globe (Points + Affected Zone Polygons)
       if (map && map.getStyle()) {
         try {
+          // Build polygon FeatureCollection for affected zones
+          const polyFeatures: any[] = [];
+          fc.features.forEach((hf) => {
+            if (hf.geometry.type === 'Polygon' || hf.geometry.type === 'MultiPolygon') {
+              polyFeatures.push(hf);
+            } else if (hf.properties.radiusKm && hf.properties.radiusKm > 0) {
+              const [lon, lat] = hf.geometry.coordinates;
+              const coords: number[][] = [];
+              const km = hf.properties.radiusKm;
+              const points = 36;
+              for (let i = 0; i <= points; i++) {
+                const angle = (i * 360) / points;
+                const rad = (angle * Math.PI) / 180;
+                const dx = km * Math.sin(rad);
+                const dy = km * Math.cos(rad);
+                const dLat = dy / 110.574;
+                const dLon = dx / (111.32 * Math.cos((lat * Math.PI) / 180));
+                coords.push([lon + dLon, lat + dLat]);
+              }
+              polyFeatures.push({
+                type: 'Feature',
+                geometry: { type: 'Polygon', coordinates: [coords] },
+                properties: hf.properties,
+              });
+            }
+          });
+
+          const polyFc = { type: 'FeatureCollection', features: polyFeatures };
+          const polySrc = map.getSource('hazard-areas') as maplibregl.GeoJSONSource | undefined;
+          if (polySrc) polySrc.setData(polyFc as any);
+          else map.addSource('hazard-areas', { type: 'geojson', data: polyFc as any });
+
+          if (!map.getLayer('hazard-area-fill')) {
+            map.addLayer({
+              id: 'hazard-area-fill',
+              type: 'fill',
+              source: 'hazard-areas',
+              paint: {
+                'fill-color': [
+                  'match',
+                  ['get', 'hazard'],
+                  'Wildfire',
+                  '#ef4444',
+                  'Cyclone',
+                  '#06b6d4',
+                  'Drought',
+                  '#f59e0b',
+                  '#ef4444',
+                ],
+                'fill-opacity': 0.35,
+              },
+            });
+          }
+
+          if (!map.getLayer('hazard-area-stroke')) {
+            map.addLayer({
+              id: 'hazard-area-stroke',
+              type: 'line',
+              source: 'hazard-areas',
+              paint: {
+                'line-color': [
+                  'match',
+                  ['get', 'hazard'],
+                  'Wildfire',
+                  '#f87171',
+                  'Cyclone',
+                  '#22d3ee',
+                  'Drought',
+                  '#fbbf24',
+                  '#f87171',
+                ],
+                'line-width': 1.8,
+                'line-dasharray': [3, 2],
+              },
+            });
+          }
+
           const src = map.getSource('hazard-alerts') as maplibregl.GeoJSONSource | undefined;
           if (src) src.setData(fc as any);
           else map.addSource('hazard-alerts', { type: 'geojson', data: fc as any });
@@ -1300,6 +1415,10 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
                 geometry: { type: 'Point', coordinates: coords },
                 properties: props,
               });
+              // Dive to aerial view of affected zone in MapLibre
+              if (map) {
+                map.flyTo({ center: coords, zoom: 14.8, pitch: 45, duration: 1800 });
+              }
             };
             for (const id of ALERT_LAYERS) {
               map.on('mouseenter', id, () => {
@@ -1324,7 +1443,16 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           toRem.forEach((ent) => viewer.entities.remove(ent));
 
           fc.features.forEach((hf) => {
-            const [lng, lat] = hf.geometry.coordinates;
+            let lng = 0;
+            let lat = 0;
+            if (hf.geometry.type === 'Point') {
+              [lng, lat] = hf.geometry.coordinates;
+            } else if (hf.geometry.type === 'Polygon') {
+              [lng, lat] = hf.geometry.coordinates[0][0];
+            } else {
+              return;
+            }
+
             const sev = hf.properties.severity;
             const hex =
               sev === 'EXTREME'
@@ -1334,6 +1462,44 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
                 : sev === 'MODERATE'
                 ? '#facc15'
                 : '#a3e635';
+
+            // Add affected zone polygon or ellipse
+            if (hf.geometry.type === 'Polygon') {
+              const flatCoords: number[] = [];
+              hf.geometry.coordinates[0].forEach(([pLon, pLat]: [number, number]) => {
+                flatCoords.push(pLon, pLat);
+              });
+              const polyEnt = viewer.entities.add({
+                polygon: {
+                  hierarchy: Cesium.Cartesian3.fromDegreesArray(flatCoords),
+                  material: Cesium.Color.fromCssColorString('#ef4444').withAlpha(0.35),
+                  outline: true,
+                  outlineColor: Cesium.Color.fromCssColorString('#f87171'),
+                  outlineWidth: 2,
+                },
+              });
+              polyEnt._isHazardAlert = true;
+            } else if (hf.properties.radiusKm && hf.properties.radiusKm > 0) {
+              const ellipseEnt = viewer.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(lng, lat),
+                ellipse: {
+                  semiMinorAxis: hf.properties.radiusKm * 1000,
+                  semiMajorAxis: hf.properties.radiusKm * 1000,
+                  material: Cesium.Color.fromCssColorString(
+                    hf.properties.hazard === 'Cyclone'
+                      ? '#06b6d4'
+                      : hf.properties.hazard === 'Drought'
+                      ? '#f59e0b'
+                      : '#ef4444'
+                  ).withAlpha(0.3),
+                  outline: true,
+                  outlineColor: Cesium.Color.fromCssColorString('#ffffff').withAlpha(0.6),
+                  outlineWidth: 1.5,
+                },
+              });
+              ellipseEnt._isHazardAlert = true;
+            }
+
             const ent = viewer.entities.add({
               position: Cesium.Cartesian3.fromDegrees(lng, lat, 55),
               point: {
@@ -1343,16 +1509,20 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
                 outlineWidth: 2.5,
                 disableDepthTestDistance: Number.POSITIVE_INFINITY,
               },
-              label: {
-                text: `⚠️ ${hf.properties.hazard.toUpperCase()}`,
-                font: 'bold 9.5px system-ui, -apple-system, sans-serif',
-                fillColor: Cesium.Color.fromCssColorString('#fef08a'),
-                showBackground: true,
-                backgroundColor: Cesium.Color.fromCssColorString('#0d1117').withAlpha(0.88),
-                backgroundPadding: new Cesium.Cartesian2(5, 3),
-                pixelOffset: new Cesium.Cartesian2(0, -16),
-                disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              },
+              ...(alertsState === 2
+                ? {
+                    label: {
+                      text: `⚠️ ${hf.properties.hazard.toUpperCase()}`,
+                      font: 'bold 9.5px system-ui, -apple-system, sans-serif',
+                      fillColor: Cesium.Color.fromCssColorString('#fef08a'),
+                      showBackground: true,
+                      backgroundColor: Cesium.Color.fromCssColorString('#0d1117').withAlpha(0.88),
+                      backgroundPadding: new Cesium.Cartesian2(5, 3),
+                      pixelOffset: new Cesium.Cartesian2(0, -16),
+                      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    },
+                  }
+                : {}),
             });
             ent._isHazardAlert = true;
             ent._hazardFeature = hf;
@@ -1364,7 +1534,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [alertsOn, cesiumReady]);
+  }, [alertsOn, alertsState, cesiumReady]);
 
   const altMeters = telemetry.altMeters || zoomToAltitudeMeters(telemetry.zoom);
   const isStreetLevel = altMeters < 8500 || telemetry.zoom >= 12;
@@ -1442,29 +1612,104 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         )}
       </div>
 
-      {/* Compact Emergency Alert ID Card Popup (with 20-Day Post-Expiry Awareness) */}
+      {/* Compact Alert ID Card anchored directly inside the Globe Container (follows globe translation & resize) */}
       {activeAlertCard && (
         <div
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            isDraggingChatRef.current = true;
+            chatDragStartRef.current = {
+              mouseX: e.clientX,
+              mouseY: e.clientY,
+              startX: chatDragOffset.x,
+              startY: chatDragOffset.y,
+            };
+            const onMove = (mv: PointerEvent) => {
+              if (!isDraggingChatRef.current) return;
+              setChatDragOffset({
+                x: chatDragStartRef.current.startX + (mv.clientX - chatDragStartRef.current.mouseX),
+                y: chatDragStartRef.current.startY + (mv.clientY - chatDragStartRef.current.mouseY),
+              });
+            };
+            const onUp = () => {
+              isDraggingChatRef.current = false;
+              window.removeEventListener('pointermove', onMove);
+              window.removeEventListener('pointerup', onUp);
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+          }}
           onClick={(e) => e.stopPropagation()}
           data-testid="hazard-alert-id-card"
-          className="absolute top-12 right-3.5 z-30 pointer-events-auto animate-in fade-in zoom-in-95 duration-150"
+          style={{
+            transform: `translate(${chatDragOffset.x}px, ${chatDragOffset.y}px)`,
+          }}
+          className="absolute top-12 right-3.5 z-30 pointer-events-auto flex flex-col items-end gap-1.5 animate-in fade-in zoom-in-95 duration-150 cursor-grab active:cursor-grabbing"
         >
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setActiveAlertCard(null)}
-              aria-label="Close alert card"
-              title="Close alert card"
-              className="absolute top-2 right-2.5 z-10 text-slate-400 hover:text-white text-sm leading-none px-1 py-0.5 cursor-pointer"
-            >
-              ×
-            </button>
+          {/* Main ID Card Box */}
+          <div className="relative shadow-2xl">
+            {/* Drag Handle & Close Button Row */}
+            <div className="absolute top-1.5 right-2 z-10 flex items-center gap-1">
+              <span
+                title="Drag to reposition card"
+                className="w-3.5 h-1.5 rounded-full bg-slate-600/70 block cursor-grab active:cursor-grabbing"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveAlertCard(null);
+                }}
+                aria-label="Close alert card"
+                title="Close alert card"
+                className="text-slate-400 hover:text-white text-xs leading-none p-0.5 cursor-pointer ml-1"
+              >
+                ✕
+              </button>
+            </div>
+
             <div
               dangerouslySetInnerHTML={{
                 __html: buildAlertPopupHtml(activeAlertCard.properties),
               }}
             />
+          </div>
+
+          {/* Quick Chat / Ask Muse Input Bar: positioned below the alert card to keep upper space visible */}
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[300px] flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-slate-950/90 border border-slate-700/80 backdrop-blur-md shadow-xl"
+          >
+            <input
+              type="text"
+              value={chatOverlayInput}
+              onChange={(e) => setChatOverlayInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && chatOverlayInput.trim() && onSendMessage) {
+                  e.preventDefault();
+                  const prompt = `[${activeAlertCard.properties.hazard || 'Alert'} at ${activeAlertCard.properties.place || activeAlertCard.properties.countryFallback}]: ${chatOverlayInput.trim()}`;
+                  onSendMessage(activeConversationId || 'conv-muse', prompt);
+                  setChatOverlayInput('');
+                }
+              }}
+              placeholder={`Ask Muse about this ${activeAlertCard.properties.hazard || 'incident'}...`}
+              className="flex-1 bg-transparent text-[10.5px] text-slate-100 placeholder-slate-400 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (chatOverlayInput.trim() && onSendMessage) {
+                  const prompt = `[${activeAlertCard.properties.hazard || 'Alert'} at ${activeAlertCard.properties.place || activeAlertCard.properties.countryFallback}]: ${chatOverlayInput.trim()}`;
+                  onSendMessage(activeConversationId || 'conv-muse', prompt);
+                  setChatOverlayInput('');
+                }
+              }}
+              className="text-cyan-400 hover:text-cyan-300 p-1 rounded-full text-xs font-semibold cursor-pointer"
+              title="Send to Muse"
+            >
+              ➔
+            </button>
           </div>
         </div>
       )}
@@ -1485,111 +1730,137 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           />
         )}
 
-        {/* Rain Radar Pill: CloudRain toggle + opacity slider (10..90%) + '+' */}
-        <div
-          className={`flex items-center gap-1 rounded-full py-0.5 pl-1 pr-2 border backdrop-blur-md transition-all ${
-            radarOn
-              ? 'bg-cyan-950/85 border-cyan-400/80 shadow-[0_0_12px_rgba(34,211,238,0.3)]'
-              : 'bg-slate-950/80 border-slate-700/80'
-          }`}
-        >
-          <button
-            type="button"
-            aria-pressed={radarOn}
-            onClick={() => {
-              haptic.globePinLight();
-              setRadarOn((prev) => !prev);
-            }}
-            title={radarOn ? 'Turn off Rain Radar' : 'Turn on Rain Radar'}
-            aria-label={radarOn ? 'Turn off Rain Radar' : 'Turn on Rain Radar'}
-            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-              radarOn ? 'bg-cyan-500/30 text-cyan-300' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <CloudRain size={12} />
-          </button>
-          <input
-            type="range"
-            min={10}
-            max={90}
-            value={radarOpacity}
-            disabled={!radarOn}
-            onChange={(e) => {
-              const val = Number(e.target.value);
-              setRadarOpacity(val);
-              try {
-                localStorage.setItem('radar-opacity', String(val));
-              } catch {}
-            }}
-            title={`Rain Radar opacity: ${radarOpacity}%`}
-            aria-label="Rain Radar opacity"
-            className="w-11 sm:w-12 h-1 accent-cyan-400 cursor-pointer disabled:opacity-40"
-          />
-          <span
-            className={`text-[10px] font-mono font-bold select-none ${
-              radarOn ? 'text-cyan-300' : 'text-slate-500'
-            }`}
-          >
-            +
-          </span>
-        </div>
-
-        {/* Emergency Alerts Toggle (GDACS / JTWC / USGS + 20-Day Post-Expiry Awareness) */}
+        {/* 3-State Interactive Rain Radar Pill (Off -> 15% Dim Halfway -> 90% Bright Full) */}
         <button
           type="button"
-          aria-pressed={alertsOn}
           onClick={() => {
             haptic.globePinLight();
-            const next = !alertsOn;
-            setAlertsOn(next);
+            const next = ((radarState + 1) % 3) as 0 | 1 | 2;
+            if (next > 0) setEngineMode('maplibre');
+            setRadarState(next);
             try {
-              localStorage.setItem('alerts-on', next ? '1' : '0');
+              localStorage.setItem('radar-state', String(next));
             } catch {}
-            if (next && hazardFeatures.length > 0 && !activeAlertCard) {
-              setActiveAlertCard(hazardFeatures[0]);
-            }
           }}
           title={
-            alertsOn
-              ? 'Emergency Alerts ON (GDACS/JTWC · 20-Day Post-Expiry Awareness)'
-              : 'Show Emergency Alerts (GDACS/JTWC · 20-Day Post-Expiry Awareness)'
+            radarState === 0
+              ? 'Rain Radar: Off (Tap for Dim 15% Overlay)'
+              : radarState === 1
+              ? 'Rain Radar: Dim 15% (Tap for Bright 90% Overlay)'
+              : 'Rain Radar: Bright 90% (Tap to Turn Off)'
           }
-          aria-label="Toggle Emergency Alerts (20-day awareness)"
-          className={`h-7 px-2 rounded-full flex items-center gap-1 border backdrop-blur-md transition-all cursor-pointer ${
-            alertsOn
-              ? 'bg-amber-500/25 border-amber-400/85 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
-              : 'bg-slate-950/80 border-slate-700/80 text-slate-400 hover:text-amber-300'
+          aria-label={`Rain Radar status: ${
+            radarState === 0 ? 'Off' : radarState === 1 ? '15% Dim' : '90% Bright'
           }`}
+          className="relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
         >
-          <TriangleAlert size={12} />
-          <span className="font-mono text-[9px] font-bold tracking-wider">20D</span>
+          {/* Animated Left-to-Right Highlight Background */}
+          <div
+            className="absolute left-0 top-0 bottom-0 bg-cyan-500/25 border-r border-cyan-400/50 transition-all duration-300 pointer-events-none"
+            style={{
+              width: radarState === 1 ? '50%' : radarState === 2 ? '100%' : '0%',
+            }}
+          />
+
+          {/* Foreground Icon & Label */}
+          <div className="relative z-10 flex items-center gap-1.5 pointer-events-none">
+            <CloudRain
+              size={12}
+              className={`transition-colors duration-300 ${
+                radarState > 0
+                  ? 'text-cyan-300 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]'
+                  : 'text-slate-400'
+              }`}
+            />
+            <span
+              className={`font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
+                radarState > 0 ? 'text-cyan-200' : 'text-slate-400'
+              }`}
+            >
+              Rain Radar
+            </span>
+          </div>
+
+          {/* Tactical 2-Dot Meter Indicator on Right */}
+          <div className="relative z-10 ml-2 flex items-center gap-1 pointer-events-none">
+            <div
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                radarState >= 1 ? 'bg-cyan-400 shadow-[0_0_4px_#22d3ee]' : 'bg-slate-700'
+              }`}
+            />
+            <div
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                radarState === 2 ? 'bg-cyan-400 shadow-[0_0_4px_#22d3ee]' : 'bg-slate-700'
+              }`}
+            />
+          </div>
         </button>
 
-        {/* Inspect Cyclone / GDACS Alert Card shortcut when alerts are on */}
-        {alertsOn && hazardFeatures.length > 0 && !activeAlertCard && (
-          <button
-            type="button"
-            onClick={() => {
-              const target = hazardFeatures[0];
-              setActiveAlertCard(target);
-              const [lng, lat] = target.geometry.coordinates;
-              const viewer = cesiumViewerRef.current;
-              const Cesium = (window as any).Cesium;
-              if (engineMode === 'cesium' && viewer && !viewer.isDestroyed() && Cesium) {
-                viewer.camera.flyTo({
-                  destination: Cesium.Cartesian3.fromDegrees(lng, lat, 4800000),
-                  duration: 1.4,
-                });
-              } else if (mapRef.current) {
-                mapRef.current.flyTo({ center: [lng, lat], zoom: 3.8, duration: 1400 });
-              }
+        {/* 3-State Interactive Alerts Pill (Off -> Pins Only Halfway -> Pins + Labels Full) */}
+        <button
+          type="button"
+          onClick={() => {
+            haptic.globePinLight();
+            const next = ((alertsState + 1) % 3) as 0 | 1 | 2;
+            setAlertsState(next);
+            try {
+              localStorage.setItem('alerts-state', String(next));
+              localStorage.setItem('alerts-on', next > 0 ? '1' : '0');
+            } catch {}
+          }}
+          title={
+            alertsState === 0
+              ? 'Alerts: Off (Tap for Incident Pins Only)'
+              : alertsState === 1
+              ? 'Alerts: Pins Only (Tap for Pins + Labels)'
+              : 'Alerts: Pins + Labels (Tap to Turn Off)'
+          }
+          aria-label={`Emergency Alerts status: ${
+            alertsState === 0 ? 'Off' : alertsState === 1 ? 'Pins Only' : 'Pins and Labels'
+          }`}
+          className="relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
+        >
+          {/* Animated Left-to-Right Highlight Background */}
+          <div
+            className="absolute left-0 top-0 bottom-0 bg-amber-500/25 border-r border-amber-400/50 transition-all duration-300 pointer-events-none"
+            style={{
+              width: alertsState === 1 ? '50%' : alertsState === 2 ? '100%' : '0%',
             }}
-            title="View active GDACS / JTWC Cyclone Alert Card"
-            className="h-7 px-2 rounded-full bg-red-950/80 border border-red-500/70 text-red-200 hover:bg-red-900/80 font-mono text-[9px] font-semibold flex items-center gap-1 backdrop-blur-md transition-all cursor-pointer"
-          >
-            <span>⚠️ {hazardFeatures[0].properties.hazard}</span>
-          </button>
-        )}
+          />
+
+          {/* Foreground Icon & Label */}
+          <div className="relative z-10 flex items-center gap-1.5 pointer-events-none">
+            <TriangleAlert
+              size={12}
+              className={`transition-colors duration-300 ${
+                alertsState > 0
+                  ? 'text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]'
+                  : 'text-slate-400'
+              }`}
+            />
+            <span
+              className={`font-mono text-[9px] font-bold tracking-wider transition-colors duration-300 ${
+                alertsState > 0 ? 'text-amber-100' : 'text-slate-400'
+              }`}
+            >
+              Alerts
+            </span>
+          </div>
+
+          {/* Tactical 2-Dot Meter Indicator on Right */}
+          <div className="relative z-10 ml-2 flex items-center gap-1 pointer-events-none">
+            <div
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                alertsState >= 1 ? 'bg-amber-400 shadow-[0_0_4px_#f59e0b]' : 'bg-slate-700'
+              }`}
+            />
+            <div
+              className={`w-1 h-1 rounded-full transition-all duration-300 ${
+                alertsState === 2 ? 'bg-amber-400 shadow-[0_0_4px_#f59e0b]' : 'bg-slate-700'
+              }`}
+            />
+          </div>
+        </button>
       </div>
 
       {/* BOTTOM-RIGHT: Horizontal Zoom In (+) / Zoom Out (-) Controls */}
