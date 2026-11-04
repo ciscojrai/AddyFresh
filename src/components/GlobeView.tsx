@@ -175,7 +175,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     }
   });
   const radarOn = radarState > 0;
-  const radarOpacity = radarState === 2 ? 90 : radarState === 1 ? 15 : 0;
+  const radarOpacity = radarState === 2 ? 90 : radarState === 1 ? 25 : 0;
 
   // Alerts 3-State: 0 = Off, 1 = Pins Only (Halfway), 2 = Pins + Labels (Full)
   const [alertsState, setAlertsState] = useState<0 | 1 | 2>(() => {
@@ -1730,7 +1730,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           />
         )}
 
-        {/* 3-State Interactive Rain Radar Pill (Off -> 15% Dim Halfway -> 90% Bright Full) */}
+        {/* 3-State Interactive Rain Radar Pill (Off -> 25% Dim Halfway -> 90% Bright Full) */}
         <button
           type="button"
           onClick={() => {
@@ -1744,13 +1744,13 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           }}
           title={
             radarState === 0
-              ? 'Rain Radar: Off (Tap for Dim 15% Overlay)'
+              ? 'Rain Radar: Off (Tap for Dim 25% Overlay)'
               : radarState === 1
-              ? 'Rain Radar: Dim 15% (Tap for Bright 90% Overlay)'
+              ? 'Rain Radar: Dim 25% (Tap for Bright 90% Overlay)'
               : 'Rain Radar: Bright 90% (Tap to Turn Off)'
           }
           aria-label={`Rain Radar status: ${
-            radarState === 0 ? 'Off' : radarState === 1 ? '15% Dim' : '90% Bright'
+            radarState === 0 ? 'Off' : radarState === 1 ? '25% Dim' : '90% Bright'
           }`}
           className="relative h-7 px-2.5 rounded-full bg-slate-950/85 border border-slate-700/80 flex items-center justify-start overflow-hidden shadow-md backdrop-blur-md active:scale-95 transition-all cursor-pointer group select-none"
         >
