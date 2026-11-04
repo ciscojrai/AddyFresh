@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5060;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5173;
 
 app.use(express.json());
 
@@ -152,7 +152,7 @@ app.get('/api/events/live', (_req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // Meta Muse chat (server side only: the key is read from .env.muse and never sent to the client)
-// Same approach as God's Eye TV: OpenAI-compatible chat/completions with tool calling.
+// OpenAI-compatible chat/completions with tool calling.
 // ---------------------------------------------------------------------------
 function loadMuseConfig() {
   let key = process.env.MODEL_API_KEY || process.env.MUSE_KEY_1 || '';

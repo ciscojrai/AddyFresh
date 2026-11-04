@@ -201,7 +201,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     return () => ro.disconnect();
   }, []);
 
-  // 2A. Initialize Cesium Ion + Google Photorealistic 3D Tiles Viewer (Primary God's Eye Engine)
+  // 2A. Initialize Cesium Ion + Google Photorealistic 3D Tiles Viewer (Primary 3D Engine)
   useEffect(() => {
     const container = cesiumContainerRef.current;
     const Cesium = (window as any).Cesium;
@@ -415,7 +415,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     };
   }, [cesiumToken]);
 
-  // Populate Cesium Entities for Events + God's Eye Street Telemetry (`VEH-xxxxxx`, Camera Nodes)
+  // Populate Cesium Entities for Events + Dynamic Street Telemetry (`VEH-xxxxxx`, Camera Nodes)
   useEffect(() => {
     const viewer = cesiumViewerRef.current;
     const Cesium = (window as any).Cesium;
@@ -424,7 +424,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     // Remove previous dynamic event entities
     const toRemove: any[] = [];
     viewer.entities.values.forEach((ent: any) => {
-      if (ent._isDynamicGodsEye) {
+      if (ent._isDynamicPin) {
         toRemove.push(ent);
       }
     });
@@ -459,7 +459,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
-      pinEntity._isDynamicGodsEye = true;
+      pinEntity._isDynamicPin = true;
       pinEntity._freshaddyEvent = ev;
     });
   }, [events, selectedEvent, activeMood, cesiumReady, onSelectEvent]);
@@ -599,7 +599,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           });
           map.addLayer(
             {
-              id: 'godseye-3d-buildings',
+              id: 'fresh-3d-buildings',
               source: 'openfreemap',
               'source-layer': 'building',
               type: 'fill-extrusion',
@@ -888,8 +888,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     return () => window.removeEventListener('freshaddy:fly-camera', handleFly);
   }, []);
 
-  // Dive to God's Eye Street Level or return to Orbit
-  const handleToggleGodsEyeDive = useCallback(() => {
+  // Dive to 3D Street Level or return to Orbit
+  const handleToggleStreetDive = useCallback(() => {
     haptic.globePinLight();
     const targetEv = selectedEvent || events[0];
     const targetLng = targetEv ? targetEv.lng : -97.7431;
@@ -1422,14 +1422,14 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         }}
       />
 
-      {/* TOP-LEFT: GOD'S EYE VIEW Header */}
+      {/* TOP-LEFT: AddyFresh Header */}
       <div className="absolute top-2.5 left-3 z-20 pointer-events-none flex flex-col gap-0.5 max-w-[56%]">
         <div className="flex items-center gap-1.5">
           <span className="w-4 h-4 rounded-full bg-cyan-500/20 border border-cyan-400/70 flex items-center justify-center text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.45)]">
             <Eye size={10} />
           </span>
           <span className="font-mono text-[11px] font-bold tracking-[0.18em] text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]">
-            GOD&apos;S EYE VIEW
+            AddyFresh
           </span>
         </div>
         {selectedEvent && (
@@ -1601,7 +1601,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         </button>
         <button
           type="button"
-          onClick={handleToggleGodsEyeDive}
+          onClick={handleToggleStreetDive}
           className={`h-7 px-2.5 rounded-full flex items-center gap-1 border backdrop-blur-md font-mono text-[9.5px] font-bold tracking-wider transition-all cursor-pointer ${
             isStreetLevel
               ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200 shadow-[0_0_14px_rgba(34,211,238,0.45)]'
@@ -1747,20 +1747,25 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            handleToggleGodsEyeDive();
+            handleToggleStreetDive();
           }}
           className={`w-7 h-7 rounded-full border flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer ${
             isStreetLevel
               ? 'bg-cyan-500/30 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.45)]'
               : 'bg-slate-900/85 hover:bg-slate-800 border-slate-700/80 text-cyan-400'
           }`}
-          title={isStreetLevel ? 'Zoom Out to 3D Globe' : "God's Eye Dive to Street Level"}
+          title={isStreetLevel ? 'Zoom Out to 3D Globe' : "Dive to 3D Street Level"}
         >
           <Eye size={13} />
         </button>
       </div>
 
-      {/* (Bottom-left NASA MGRS/ALT readout removed per user instruction) */}
+      {/* BOTTOM-LEFT: Cesium Ion & Google Maps small attribution badge */}
+      <div className="absolute bottom-2 left-3 z-20 pointer-events-none font-mono text-[9px] tracking-wider text-slate-400/80 bg-slate-950/60 px-2 py-0.5 rounded border border-cyan-500/20 backdrop-blur-sm flex items-center gap-1.5">
+        <span className="text-cyan-400 font-semibold">CESIUM ion</span>
+        <span>·</span>
+        <span className="text-slate-300">Google Maps 3D</span>
+      </div>
 
       {/* TV 10' BOTTOM D-PAD & MOUSE NAVIGATION BAR */}
       <div
