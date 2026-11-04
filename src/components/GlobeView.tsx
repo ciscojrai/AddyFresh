@@ -49,40 +49,67 @@ function zoomToAltitudeMeters(zoom: number): number {
   return Math.max(45, Math.round(orbitMeters));
 }
 
-// Create a clean, modern event pin dot for Cesium 3D billboards
+// Create a clean, modern event pin dot for Cesium 3D billboards with high-visibility pulsing rings
 function createCesiumPinDataUrl(color: string, isSelected: boolean): string {
   const canvas = document.createElement('canvas');
-  canvas.width = 36;
-  canvas.height = 36;
+  canvas.width = 64;
+  canvas.height = 64;
   const ctx = canvas.getContext('2d');
   if (!ctx) return '';
 
-  const cx = 18;
-  const cy = 18;
-  const r = isSelected ? 12 : 9;
+  const cx = 32;
+  const cy = 32;
 
-  // Outer glow
-  ctx.beginPath();
-  ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
-  ctx.fillStyle = isSelected ? 'rgba(56, 189, 248, 0.4)' : 'rgba(34, 211, 238, 0.25)';
-  ctx.fill();
+  if (isSelected) {
+    // Large outer radar halo
+    ctx.beginPath();
+    ctx.arc(cx, cy, 28, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+    ctx.fill();
 
-  // Pin circle
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
+    // Secondary pulse ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, 21, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.55)';
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#38bdf8';
+    ctx.stroke();
 
-  // White border
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = '#ffffff';
-  ctx.stroke();
+    // Solid core pin circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+    ctx.fillStyle = '#0284c7';
+    ctx.fill();
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
 
-  // Center white dot
-  ctx.beginPath();
-  ctx.arc(cx, cy, isSelected ? 4 : 3, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fill();
+    // Center bright white dot
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+  } else {
+    // Unselected subtle pin
+    ctx.beginPath();
+    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(34, 211, 238, 0.2)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+  }
 
   return canvas.toDataURL();
 }
@@ -430,32 +457,43 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     });
     toRemove.forEach((ent) => viewer.entities.remove(ent));
 
-    events.forEach((ev) => {
+    // If an event is selected, only show the selected event; otherwise show all events
+    const displayEvents = selectedEvent
+      ? events.filter((ev) => ev.id === selectedEvent.id)
+      : events;
+
+    displayEvents.forEach((ev) => {
       const isSelected = selectedEvent?.id === ev.id;
       const accent = isSelected ? '#38bdf8' : activeMood.color || '#22d3ee';
       const cleanTitle = ev.title.length > 22 ? ev.title.slice(0, 21) + '…' : ev.title;
 
-      // Event Pin Billboard + Clean Title Label
+      // Event Pin Billboard + Clean Title Label (Selected is high-visibility 48x48 cyan radar beacon)
       const pinEntity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(ev.lng, ev.lat, 35),
         billboard: {
           image: createCesiumPinDataUrl(accent, isSelected),
-          width: isSelected ? 30 : 24,
-          height: isSelected ? 30 : 24,
+          width: isSelected ? 48 : 24,
+          height: isSelected ? 48 : 24,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
-          text: cleanTitle,
-          font: '600 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          text: `  ${cleanTitle}  `,
+          font: isSelected
+            ? 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            : '600 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           fillColor: Cesium.Color.fromCssColorString(isSelected ? '#38bdf8' : '#ffffff'),
           outlineColor: Cesium.Color.fromCssColorString('#020617'),
-          outlineWidth: 3,
+          outlineWidth: isSelected ? 4 : 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           showBackground: true,
-          backgroundColor: Cesium.Color.fromCssColorString('#0f172a').withAlpha(0.9),
-          backgroundPadding: new Cesium.Cartesian2(7, 4),
-          pixelOffset: new Cesium.Cartesian2(0, -22),
+          backgroundColor: Cesium.Color.fromCssColorString(
+            isSelected ? '#031024' : '#0f172a'
+          ).withAlpha(0.95),
+          backgroundPadding: isSelected
+            ? new Cesium.Cartesian2(10, 6)
+            : new Cesium.Cartesian2(7, 4),
+          pixelOffset: new Cesium.Cartesian2(0, isSelected ? -30 : -22),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
@@ -719,7 +757,12 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    events.forEach((ev) => {
+    // If an event is selected, only show the selected event; otherwise show all events
+    const displayEvents = selectedEvent
+      ? events.filter((ev) => ev.id === selectedEvent.id)
+      : events;
+
+    displayEvents.forEach((ev) => {
       const isSelected = selectedEvent?.id === ev.id;
       const accent = isSelected ? '#38bdf8' : activeMood.color || '#22d3ee';
 
