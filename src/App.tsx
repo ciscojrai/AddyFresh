@@ -1224,7 +1224,7 @@ export default function App() {
                 }`}
               />
               <span className="text-[9px] text-slate-400 group-hover:text-cyan-300 font-mono tracking-wider mt-1 uppercase">
-                {isFeedCollapsed ? '▾ Collapsed Down · Tap to Expand' : 'Slide down to collapse'}
+                {isFeedCollapsed ? '▾ Collapsed Down · Tap to Expand' : 'Tap to Collapse'}
               </span>
             </div>
 
