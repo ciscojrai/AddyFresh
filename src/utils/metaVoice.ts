@@ -415,14 +415,6 @@ export function speakWithAddyVoice(text: string, voice = 'af_bella') {
 }
 
 function speakBrowserFallback(clean: string) {
-  try {
-    if ('speechSynthesis' in window) {
-      const utter = new SpeechSynthesisUtterance(clean.slice(0, 450));
-      utter.rate = 1.04;
-      utter.pitch = 1.0;
-      window.speechSynthesis.speak(utter);
-      // Only report here when no caller already explained why Bella was skipped.
-      if (!lastReport || lastReport.source !== 'browser') report('browser', 'browser voice used');
-    }
-  } catch {}
+  // Disabled browser speech fallback to prevent overlapping voices
+  return;
 }
