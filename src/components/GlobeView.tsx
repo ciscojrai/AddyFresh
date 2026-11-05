@@ -225,12 +225,12 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
   const chatDragStartRef = useRef({ mouseX: 0, mouseY: 0, startX: 0, startY: 0 });
   const radarLayerCesiumRef = useRef<any>(null);
   const [telemetry, setTelemetry] = useState({
-    lat: 30.2672,
+    lat: 18.0,
     lng: -97.7431,
-    zoom: 1.75,
+    zoom: 2.2,
     pitch: 0,
     bearing: 0,
-    altMeters: 16143645,
+    altMeters: 8800000,
   });
 
   useEffect(() => {
@@ -372,9 +372,9 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         }
       })();
 
-      // Initial orbital camera position over North America / Pacific
+      // Initial orbital camera position centered and filling viewport
       viewer.camera.setView({
-        destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 16143645),
+        destination: Cesium.Cartesian3.fromDegrees(-97.7431, 18.0, 8800000),
         orientation: {
           heading: 0,
           pitch: -Cesium.Math.PI_OVER_TWO,
@@ -633,9 +633,9 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
     const map = new maplibregl.Map({
       container,
       style: hybridGlobeStyle,
-      center: [-95.5, 30.2],
-      zoom: 1.75,
-      minZoom: 1.1,
+      center: [-95.5, 18.0],
+      zoom: 2.2,
+      minZoom: 1.9,
       maxZoom: 19.2,
       pitch: 0,
       maxPitch: 75,
@@ -987,7 +987,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         });
       } else {
         viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(targetLng, targetLat, 16143645),
+          destination: Cesium.Cartesian3.fromDegrees(targetLng, 18.0, 8800000),
           orientation: {
             heading: 0,
             pitch: -Cesium.Math.PI_OVER_TWO,
@@ -1013,8 +1013,8 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       });
     } else {
       map.flyTo({
-        center: [targetLng, targetLat],
-        zoom: 1.75,
+        center: [targetLng, 18.0],
+        zoom: 2.2,
         pitch: 0,
         bearing: 0,
         duration: 2200,
@@ -1087,7 +1087,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
         if (delta === 'in') {
           viewer.camera.zoomIn(Math.max(120, h * 0.48));
         } else {
-          viewer.camera.zoomOut(Math.min(12000000, Math.max(200, h * 0.85)));
+          viewer.camera.zoomOut(Math.min(9500000, Math.max(200, h * 0.85)));
         }
         return;
       }
@@ -1097,7 +1097,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
       const nextZoom =
         delta === 'in'
           ? Math.min(19.2, curZ + (curZ < 6 ? 1.4 : 1.1))
-          : Math.max(1.1, curZ - (curZ > 10 ? 1.4 : 1.1));
+          : Math.max(1.9, curZ - (curZ > 10 ? 1.4 : 1.1));
       const nextPitch =
         delta === 'in' && nextZoom >= 12.5
           ? 62
