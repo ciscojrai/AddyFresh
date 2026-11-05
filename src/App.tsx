@@ -10,6 +10,9 @@ import { EventModal } from './components/EventModal';
 import { StreetViewPanel } from './components/StreetViewPanel';
 import { PhoneStatusBar } from './components/PhoneStatusBar';
 import { EVENTS_DATA, MOODS } from './data/events';
+import { LIVE_SPORTS_DATA } from './data/liveSports';
+import { REALITY_TV_DATA } from './data/realityTv';
+import { COLLAPSED_PILLS_DATA } from './data/collapsedPills';
 import { FESTIVAL_VIDEOS } from './data/festivalVideos';
 import {
   EventItem,
@@ -31,140 +34,26 @@ import { speakWithAddyVoice, stopAddyVoicePlayback } from './utils/metaVoice';
 import { useVoiceSession } from './hooks/useVoiceSession';
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
-  {
-    id: 'conv-muse',
-    title: 'Muse AI Assistant',
-    pinned: true,
-    updatedAt: 'Active',
-    messages: [
-      {
-        id: 'm-muse-welcome',
-        sender: 'assistant',
-        text: 'Hello! I am Muse, your live AI discovery guide inside FreshAddy. Ask me about music festivals, clubs, concerts, rain radar, or emergency alerts across the globe.',
-        timestamp: 'Just now',
-      },
-    ],
-  },
-  {
-    id: 'conv-1',
-    title: 'Tokyo Underground & Synthwave',
-    pinned: true,
-    updatedAt: '2h ago',
-    messages: [
-      {
-        id: 'm1-1',
-        sender: 'user',
-        text: 'What are the top cyberpunk and synthwave venues in Tokyo right now?',
-        timestamp: '10:14 PM',
-      },
-      {
-        id: 'm1-2',
-        sender: 'assistant',
-        text: 'Top recommendations in Tokyo:\n\n1. Cyberpunk Rooftop Rave at Roppongi Hills Mori Tower\n2. Tokyo / Shibuya B2 for raw modular synthwave\n3. Womb Tokyo for multi-floor visual mapping\n\nClear night weather (18°C) currently reported on rain radar.',
-        timestamp: '10:15 PM',
-      },
-    ],
-  },
-  {
-    id: 'conv-2',
-    title: 'Comic-Con 2027 Schedule',
-    pinned: true,
-    updatedAt: '5h ago',
-    messages: [
-      {
-        id: 'm2-1',
-        sender: 'user',
-        text: 'Do we have events logged into next year like Comic Con late 2027?',
-        timestamp: '8:30 PM',
-      },
-      {
-        id: 'm2-2',
-        sender: 'assistant',
-        text: 'Yes! Tokyo Comic-Con is scheduled for late November 2027 at Makuhari Messe, alongside San Diego Comic-Con 2027 badge registration lotteries. BigQuery graph indexing has all team aliases and guest panels mapped.',
-        timestamp: '8:31 PM',
-      },
-    ],
-  },
-  {
-    id: 'conv-3',
-    title: 'Global Music Festivals Calendar',
-    pinned: true,
-    updatedAt: '1d ago',
-    messages: [
-      {
-        id: 'm3-1',
-        sender: 'user',
-        text: 'Summarize the top European music festivals on the globe.',
-        timestamp: 'Yesterday',
-      },
-      {
-        id: 'm3-2',
-        sender: 'assistant',
-        text: '• London Printworks Drum & Bass Open Air\n• Berlin Kraftwerk Techno Marathon\n• Paris Nuit Blanche Sound Installations in Le Marais\n\nAll 3 have glowing pins on your 3D globe.',
-        timestamp: 'Yesterday',
-      },
-    ],
-  },
-  {
-    id: 'conv-4',
-    title: 'Berlin Secret Boiler Rooms',
-    pinned: false,
-    updatedAt: '2h ago',
-    messages: [
-      {
-        id: 'm4-1',
-        sender: 'user',
-        text: 'Any unlisted industrial techno sessions in Berlin?',
-        timestamp: 'Nov 1',
-      },
-      {
-        id: 'm4-2',
-        sender: 'assistant',
-        text: 'Tresor Berlin and Kraftwerk industrial boiler rooms are tracking 3,400+ attendees going this weekend. Sub-bass rave mood is active on the globe.',
-        timestamp: 'Nov 1',
-      },
-    ],
-  },
-  {
-    id: 'conv-5',
-    title: 'Rio Sunset Beach Grooves',
-    pinned: false,
-    updatedAt: '3h ago',
-    messages: [
-      {
-        id: 'm5-1',
-        sender: 'user',
-        text: 'Best sunset acoustic vibes in Rio de Janeiro?',
-        timestamp: 'Nov 1',
-      },
-      {
-        id: 'm5-2',
-        sender: 'assistant',
-        text: 'Ipanema Posto 9 sunset jam starts at 17:30 with live bossa fusions and seaside acoustic chill.',
-        timestamp: 'Nov 1',
-      },
-    ],
-  },
-  {
-    id: 'conv-6',
-    title: 'Rain Radar Event Advisories',
-    pinned: false,
-    updatedAt: '4h ago',
-    messages: [
-      {
-        id: 'm6-1',
-        sender: 'user',
-        text: 'How does rain radar affect outdoor festival alerts?',
-        timestamp: 'Nov 1',
-      },
-      {
-        id: 'm6-2',
-        sender: 'assistant',
-        text: 'When rain radar is toggled on, open-air stadiums in precipitation zones trigger weather advisories in your alerts drawer.',
-        timestamp: 'Nov 1',
-      },
-    ],
-  },
+  { id: 'conv-muse', title: 'Where is my car?', pinned: true, updatedAt: 'Active', messages: [
+    { id: 'm-car-q', sender: 'user', text: 'Where is my car?', timestamp: 'Just now' },
+    { id: 'm-car-a', sender: 'assistant', text: 'Your Family SUV (demo plate DEMO-001, Dana\'s pickup car) is at the Coral Grove home base, Miami — 25.76, -80.19, city level only in this demo. Your sedan (DEMO-002, Alex) is listed at the same home base. Want me to show the SUV on the globe?', timestamp: 'Just now', globeActions: [{ type: 'fly_to', lat: 25.76, lon: -80.19, label: 'Coral Grove home base, Miami' }] },
+  ] },
+  { id: 'conv-1', title: 'Where is my delivery?', pinned: false, updatedAt: '2h ago', messages: [
+    { id: 'm1-1', sender: 'user', text: 'Where is my delivery?', timestamp: '10:14 PM' },
+    { id: 'm1-2', sender: 'assistant', text: 'In the revised demo list: your Walmart order #2000151-51102757 was delayed, then arrived — USPS 9361289715768024660055. Your FedEx #FX-88472910 and USPS #9400 1118 9956 2000 were both out for delivery in the demo set. Your Amazon order #114-8839201 is still the delayed one in this demo.', timestamp: '10:15 PM', globeActions: [{ type: 'fly_to', lat: 25.76, lon: -80.19, label: 'Coral Grove home base, Miami' }] },
+  ] },
+  { id: 'conv-2', title: 'Where is my service appointment?', pinned: false, updatedAt: '5h ago', messages: [
+    { id: 'm2-1', sender: 'user', text: 'Where is my service appointment?', timestamp: '8:30 PM' },
+    { id: 'm2-2', sender: 'assistant', text: 'In the demo, your next service-style appointment is the school club showcase — Saturday, 10:30, Bayside Elementary (fictional), 25.78, -80.18, with Riley + Alex — followed by the family grocery stop at Coral Grove Market at 12:00. No real appointment is booked in this demo data.', timestamp: '8:31 PM', globeActions: [{ type: 'fly_to', lat: 25.78, lon: -80.18, label: 'Bayside Elementary' }] },
+  ] },
+  { id: 'conv-3', title: 'Where is my family member\'s birthday package?', pinned: false, updatedAt: '1d ago', messages: [
+    { id: 'm3-1', sender: 'user', text: 'Where is my family member\'s birthday package?', timestamp: 'Yesterday' },
+    { id: 'm3-2', sender: 'assistant', text: 'The demo birthday is the family birthday party — Saturday, 16:30, at a friend\'s house in Coral Grove (fictional), 25.75, -80.21. Pagos reminder from the demo: bring gift + party supplies. No separate birthday package tracking number is in the demo data.', timestamp: 'Yesterday', globeActions: [{ type: 'fly_to', lat: 25.75, lon: -80.21, label: 'Coral Grove birthday party' }] },
+  ] },
+  { id: 'conv-4', title: 'What deliveries should I expect tomorrow?', pinned: false, updatedAt: '2h ago', messages: [
+    { id: 'm4-1', sender: 'user', text: 'What deliveries should I expect tomorrow?', timestamp: 'Nov 1' },
+    { id: 'm4-2', sender: 'assistant', text: 'Tomorrow in the revised demo list (Nov 5): the eBay delivery #EB-993820 and the USPS package #9400 1118 9956 2000, both marked out for delivery / delivered in the demo set. Nothing else in the revised list is dated Nov 5 — the next ones are Nov 6 (Walmart) and Nov 7 (Amazon).', timestamp: 'Nov 1', globeActions: [{ type: 'fly_to', lat: 25.76, lon: -80.19, label: 'Coral Grove home base, Miami' }] },
+  ] },
 ];
 
 function generateAiResponse(query: string, events: EventItem[]): string {
@@ -269,7 +158,7 @@ export default function App() {
   const { triggerPanelToggle, triggerGlobePin, triggerNav } = useHaptic();
 
   // State
-  const [events, setEvents] = useState<EventItem[]>(EVENTS_DATA);
+  const [events, setEvents] = useState<EventItem[]>([...EVENTS_DATA, ...LIVE_SPORTS_DATA, ...REALITY_TV_DATA, ...COLLAPSED_PILLS_DATA]);
   const [activeMood, setActiveMood] = useState<Mood>(MOODS[0]); // Electric Pulse default
   const [activeNav, setActiveNav] = useState<ActiveNav>('home');
   const [searchQuery, setSearchQuery] = useState('');

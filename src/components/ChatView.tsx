@@ -16,7 +16,6 @@ import {
   Volume2,
   VolumeX,
   Paperclip,
-  RotateCw,
 } from 'lucide-react';
 
 import { safeShare } from '../utils/share';
@@ -341,11 +340,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onRefreshGlobe(refreshActions)}
-                      title="Show on globe again"
-                      aria-label="Show on globe again"
-                      className="w-5 h-5 rounded-full flex items-center justify-center text-slate-500 hover:text-cyan-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                      title="Show on globe"
+                      aria-label="Show on globe"
+                      className="px-2 py-0.5 rounded-full text-[10px] font-medium text-cyan-300 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer border border-cyan-500/40"
                     >
-                      <RotateCw size={12} />
+                      Show on globe
                     </button>
                   )}
                 </span>

@@ -15,27 +15,32 @@ export interface GlobeActivityCategory {
 
 export const GLOBE_ACTIVITY_CATEGORIES: GlobeActivityCategory[] = [
   {
-    title: 'Live sports',
+    title: 'LIVE SPORTS',
     icon: '⚽',
     pills: ['Football', 'Baseball', 'Basketball', 'F1', 'Tennis', 'Cycling'],
   },
   {
-    title: 'Reality TV',
+    title: 'REALITY TV',
     icon: '📺',
     pills: ['Nature', 'Cooking', 'City', 'Business', 'Travel', 'Talent'],
   },
   {
-    title: 'Personal',
+    title: 'REAL ESTATE',
+    icon: '🏠',
+    pills: ['Glyfada Center', 'Golf', 'Kato Glyfada', 'Aigli', 'Terpsithea'],
+  },
+  {
+    title: 'PERSONAL',
     icon: '✨',
     pills: ['Bucket List', 'Kids School', 'Home', 'Family', 'Boat'],
   },
   {
-    title: 'Contractor',
+    title: 'CONTRACTOR',
     icon: '🛠️',
     pills: ['Roof Jobs', 'Vehicles', 'New Builds', 'Remodels', 'Commercial'],
   },
   {
-    title: 'Calendar',
+    title: 'CALENDAR',
     icon: '📅',
     pills: ['Events', 'kids', 'packages', 'work', 'family'],
   },
@@ -60,7 +65,7 @@ export const GlobeActivitiesMenu: React.FC<GlobeActivitiesMenuProps> = ({
             <div className="flex items-center gap-1.5 px-1">
               <span className="text-[11px] leading-none opacity-80">{cat.icon}</span>
               <span className="font-mono text-[9.5px] font-bold uppercase tracking-wider text-cyan-300/80">
-                Row {idx + 1} · {cat.title}
+                {cat.title}
               </span>
             </div>
 
