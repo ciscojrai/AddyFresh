@@ -275,21 +275,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
   const [inspectEvent, setInspectEvent] = useState<EventItem | null>(null);
-  const [streetViewTarget, setStreetViewTarget] = useState<StreetViewTarget | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const eventId = params.get('event');
-        if (eventId) {
-          const found = EVENTS_DATA.find((e) => e.id === eventId);
-          if (found) return eventToStreetViewTarget(found);
-        }
-      } catch {
-        // Fallback
-      }
-    }
-    return EVENTS_DATA.length > 0 ? eventToStreetViewTarget(EVENTS_DATA[0]) : null;
-  });
+  const [streetViewTarget, setStreetViewTarget] = useState<StreetViewTarget | null>(null);
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(
     new Set(['ev-1', 'ev-3'])
   );
