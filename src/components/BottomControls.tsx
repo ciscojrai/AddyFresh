@@ -112,16 +112,6 @@ export const BottomControls: React.FC<BottomControlsProps> = ({
           )}
         </button>
       </nav>
-      {voiceEngineLabel && (
-        <p
-          className={`voice-engine-caption ${voiceState !== 'closed' ? 'voice-engine-caption--live' : ''}`}
-          title={voiceEngineReason || undefined}
-          aria-live="polite"
-        >
-          Voice: {voiceEngineLabel}
-          {voiceEngineReason ? ` — ${voiceEngineReason}` : ''}
-        </p>
-      )}
     </footer>
   );
 };
