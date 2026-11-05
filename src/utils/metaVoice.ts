@@ -283,7 +283,12 @@ export function stopAddyVoicePlayback() {
 /** The bridge URL compiled into the bundle, if any. */
 export function configuredBridgeUrl(): string {
   const env = (import.meta as any).env || {};
-  return String(env.VITE_VOICE_BRIDGE_URL || '').trim().replace(/\/+$/, '');
+  const custom = String(env.VITE_VOICE_BRIDGE_URL || '').trim().replace(/\/+$/, '');
+  if (custom) return custom;
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://127.0.0.1:8788';
+  }
+  return '';
 }
 
 /** A failure the caller can show, instead of a silent null. */
@@ -415,6 +420,17 @@ export function speakWithAddyVoice(text: string, voice = 'af_bella') {
 }
 
 function speakBrowserFallback(clean: string) {
-  // Disabled browser speech fallback to prevent overlapping voices
-  return;
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  // If active Bella audio is currently playing, NEVER play browser fallback simultaneously
+  if (activeAudio && !activeAudio.paused) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.rate = 1.05;
+    utt.pitch = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    const best = voices.find((v) => /samantha|karen|victoria|female|en-US/i.test(v.name));
+    if (best) utt.voice = best;
+    window.speechSynthesis.speak(utt);
+  } catch {}
 }

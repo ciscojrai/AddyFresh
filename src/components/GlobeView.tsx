@@ -2152,7 +2152,7 @@ export const GlobeView: React.FC<GlobeViewProps> = ({
               )}
               {/* Live Badge */}
               <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-md border border-white/10 flex items-center gap-1 text-[9px] font-mono text-emerald-300 font-semibold uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
                 LIVE
               </div>
             </div>

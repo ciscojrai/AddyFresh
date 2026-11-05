@@ -273,7 +273,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
               {/* LIVE BROADCAST BADGE FOR FRESHLY SYNCED LIVE EVENTS */}
               {isLiveItem && (
                 <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-950/85 border border-cyan-400 text-cyan-300 text-[10px] font-bold tracking-wider uppercase shadow-lg backdrop-blur-md">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.8)]" />
                   <Radio size={11} className="text-cyan-400" />
                   <span>Live Stream</span>
                 </div>

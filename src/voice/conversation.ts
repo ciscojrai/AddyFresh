@@ -163,9 +163,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     stopRecognizer();
     rec = new SR();
     rec.lang = 'en-US';
-    rec.continuous = false;
-    // Final results only: interim results were the duplication source, and the
-    // session never shows interim text in the UI, so nothing is lost by this.
+    rec.continuous = true;
     rec.interimResults = false;
 
     // Interim results repeat with a growing transcript, so appending each one

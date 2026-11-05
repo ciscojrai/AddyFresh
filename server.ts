@@ -371,6 +371,31 @@ app.post('/api/voice/transcribe', async (req: Request, res: Response) => {
   }
 });
 
+app.all('/api/voice/tts', async (req: Request, res: Response) => {
+  const text = (req.method === 'GET' ? req.query?.text : req.body?.text) || '';
+  const voice = (req.method === 'GET' ? req.query?.voice : req.body?.voice) || 'af_bella';
+  try {
+    const upstreamUrl = `http://127.0.0.1:8788/tts?text=${encodeURIComponent(String(text))}&voice=${encodeURIComponent(String(voice))}`;
+    const r = await fetch(upstreamUrl);
+    if (!r.ok) return res.status(r.status).send(await r.text());
+    const buf = await r.arrayBuffer();
+    res.setHeader('Content-Type', 'audio/wav');
+    return res.send(Buffer.from(buf));
+  } catch (err: any) {
+    return res.status(502).json({ error: 'voice_bridge_offline', detail: err.message });
+  }
+});
+
+app.get('/api/voice/health', async (_req: Request, res: Response) => {
+  try {
+    const r = await fetch('http://127.0.0.1:8788/health');
+    const data = await r.json();
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(502).json({ ok: false, error: err.message });
+  }
+});
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const tester = net.createServer()

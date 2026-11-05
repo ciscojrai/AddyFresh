@@ -66,7 +66,6 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
         type="button"
         data-voice-state={state}
         onClick={onToggle}
-        title={state === 'countdown' ? `Listening: ${secondsLeft}s to reply` : label}
         aria-label={label}
         aria-pressed={open}
         className={`relative w-11 h-11 rounded-full flex items-center justify-center border transition-all active:scale-90 cursor-pointer ${
@@ -93,7 +92,6 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
       type="button"
       data-voice-state={state}
       onClick={onToggle}
-      title={state === 'countdown' ? `Listening: ${secondsLeft}s to reply` : label}
       aria-label={label}
       aria-pressed={open}
       className={`relative p-2.5 rounded-full transition-all duration-200 cursor-pointer ${
